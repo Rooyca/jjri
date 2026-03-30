@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juegos Jri</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Player Name Modal -->
+    <div id="name-modal" class="modal">
+        <div class="modal-content">
+            <h2>🎮 ¡Bienvenido a Juegis Jri! 🎮</h2>
+            <p>Ingresa tu nombre:</p>
+            <input type="text" id="player-name-input" placeholder="Tu nombre..." maxlength="20" autofocus>
+            <button id="save-name-btn" class="btn-primary">Jugar</button>
+        </div>
+    </div>
+
+    <header>
+        <div>
+            <h1>🎮 Juegos Jri 🎮</h1>
+            <p class="subtitle">Jugar. Competir. Ganar.</p>
+        </div>
+        <div class="header-right">
+            <div id="player-info" class="player-badge">
+                <span class="player-label"></span>
+                <span id="player-name-display" class="player-name"></span>
+                <button id="change-name-btn" class="btn-icon" title="Cambiar nombre">✏️</button>
+            </div>
+        </div>
+    </header>
+
+    <nav class="nav-tabs">
+        <button class="tab-btn active" data-view="menu">Juegos</button>
+        <button class="tab-btn" data-view="leaderboard">Tablas</button>
+    </nav>
+
+    <main>
+        <section id="menu-view" class="view-section">
+            <h2>Selecciona un Juego</h2>
+            <div id="game-list" class="game-grid">Cargando Juegos...</div>
+        </section>
+
+        <section id="leaderboard-view" class="view-section hidden">
+            <h2>🏆 Tablas</h2>
+            <div class="filter-controls">
+                <label>Filtrar por juegos:</label>
+                <select id="leaderboard-filter">
+                    <option value="">Todos</option>
+                </select>
+                <button id="refresh-leaderboard" class="btn-secondary">Recargar</button>
+            </div>
+            <div id="leaderboard-content">Cargando...</div>
+        </section>
+
+        <section id="game-view" class="view-section hidden">
+            <div id="game-container"></div>
+        </section>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>

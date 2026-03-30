@@ -1,0 +1,202 @@
+// Speed Typing Game Module
+(function() {
+    'use strict';
+    
+    window.GameModules = window.GameModules || {};
+    
+    const TypingUtils = {
+        calculateWpm(correctWords, startTime) {
+            if (!startTime) return 0;
+            const elapsedMinutes = (Date.now() - startTime) / 60000;
+            return elapsedMinutes > 0 ? Math.round(correctWords / elapsedMinutes) : 0;
+        },
+
+        showWord(wordDisplayEl, words, currentWordIndex) {
+            if (currentWordIndex < words.length) {
+                wordDisplayEl.textContent = words[currentWordIndex];
+            }
+        },
+
+        validateInput(typedText, currentWord) {
+            const isCorrect = typedText.toLowerCase() === currentWord;
+            const isPartialMatch = currentWord.startsWith(typedText.toLowerCase());
+            
+            return {
+                isCorrect,
+                isPartialMatch,
+                shouldAdvance: isCorrect
+            };
+        },
+
+        applyInputFeedback(inputEl, validation) {
+            if (validation.isCorrect) {
+                inputEl.style.border = '2px solid #4ade80';
+            } else if (validation.isPartialMatch) {
+                inputEl.style.border = '2px solid #90EE90';
+            } else {
+                inputEl.style.border = '2px solid #FFB6C6';
+            }
+        },
+
+        clearInput(inputEl) {
+            inputEl.value = '';
+            inputEl.style.border = '';
+        }
+    };
+    
+    window.GameModules['typing'] = {
+        state: {
+            words: [],
+            currentWordIndex: 0,
+            startTime: null,
+            correctWords: 0,
+            totalChars: 0,
+            errors: 0,
+            intervalId: null,
+            timeLeft: 0
+        },
+        
+        start: async function(config, container, callbacks) {
+            this.state.correctWords = 0;
+            this.state.currentWordIndex = 0;
+            this.state.errors = 0;
+            this.state.totalChars = 0;
+            this.state.timeLeft = config.duration_seconds;
+            this.state.started = false;
+            
+            const API_BASE = window.API_BASE || `https://${window.location.host}/api`;
+            const wordListUrl = config.settings.word_list_url.startsWith('http') 
+                ? config.settings.word_list_url 
+                : `${API_BASE}${config.settings.word_list_url.replace('/api', '')}`;
+            const response = await fetch(wordListUrl);
+            const data = await response.json();
+            
+            this.state.words = data.words.sort(() => Math.random() - 0.5).slice(0, 100);
+            
+            container.innerHTML = `
+                <div class="game-header">
+                    <h3>${config.title}</h3>
+                    <div class="timer">Tiempo: <span id="time-left">${this.state.timeLeft}</span>s</div>
+                </div>
+                <div class="typing-container">
+                    <button id="start-btn" class="btn-primary" style="font-size: 1.5em; padding: 20px 40px; display: block; margin: 0 auto;">Iniciar</button>
+                    <div id="game-area" style="display: none;">
+                        <div class="typing-stats">
+                            <div>PPM: <span id="wpm">0</span></div>
+                            <div>Precisión: <span id="accuracy">100</span>%</div>
+                        </div>
+                        <div class="word-display" id="word-display"></div>
+                        <input type="text" id="typing-input" class="typing-input" placeholder="Escribe aquí..." autocomplete="off">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const startBtn = container.querySelector('#start-btn');
+            const gameArea = container.querySelector('#game-area');
+            const wordDisplay = container.querySelector('#word-display');
+            const typingInput = container.querySelector('#typing-input');
+            const wpmDisplay = container.querySelector('#wpm');
+            const accuracyDisplay = container.querySelector('#accuracy');
+            const timeDisplay = container.querySelector('#time-left');
+            const progressBar = container.querySelector('#progress');
+            
+            const showWord = () => {
+                if (wordDisplay && this.state.words && this.state.words.length > 0) {
+                    TypingUtils.showWord(wordDisplay, this.state.words, this.state.currentWordIndex);
+                    if (progressBar) {
+                        progressBar.style.width = `${(this.state.currentWordIndex / this.state.words.length) * 100}%`;
+                    }
+                }
+            };
+            
+            const updateStats = () => {
+                if (!this.state.startTime) return;
+                
+                const elapsedMinutes = (Date.now() - this.state.startTime) / 60000;
+                const accuracy = this.state.totalChars > 0 
+                    ? Math.round(((this.state.totalChars - this.state.errors) / this.state.totalChars) * 100)
+                    : 100;
+                
+                wpmDisplay.textContent = this.state.correctWords;
+                accuracyDisplay.textContent = accuracy;
+            };
+            
+            startBtn.onclick = () => {
+                if (this.state.started) return;
+                this.state.started = true;
+                this.state.startTime = Date.now();
+                
+                startBtn.style.display = 'none';
+                gameArea.style.display = 'block';
+                typingInput.focus();
+                
+                typingInput.addEventListener('input', (e) => {
+                    const typed = e.target.value;
+                    const currentWord = this.state.words[this.state.currentWordIndex];
+                    
+                    const validation = TypingUtils.validateInput(typed, currentWord);
+                    
+                    if (validation.isCorrect) {
+                        setTimeout(() => {
+                            this.state.correctWords++;
+                            this.state.totalChars += currentWord.length;
+                            callbacks.onScoreUpdate(this.state.correctWords);
+                            this.state.currentWordIndex++;
+                            TypingUtils.clearInput(typingInput);
+                            showWord();
+                            updateStats();
+                        }, 10);
+                    } else {
+                        TypingUtils.applyInputFeedback(typingInput, validation);
+                        if (!validation.isPartialMatch) {
+                            this.state.errors++;
+                            updateStats();
+                        }
+                    }
+                });
+                
+                typingInput.addEventListener('keydown', (e) => {
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                        const typed = typingInput.value;
+                        const currentWord = this.state.words[this.state.currentWordIndex];
+                        
+                        if (typed === currentWord) {
+                            typingInput.style.border = '3px solid #4ade80';
+                            setTimeout(() => {
+                                this.state.correctWords++;
+                                this.state.totalChars += currentWord.length;
+                                callbacks.onScoreUpdate(this.state.correctWords);
+                                this.state.currentWordIndex++;
+                                TypingUtils.clearInput(typingInput);
+                                showWord();
+                                updateStats();
+                            }, 200);
+                        }
+                    }
+                });
+                
+                this.state.intervalId = setInterval(() => {
+                    this.state.timeLeft--;
+                    timeDisplay.textContent = this.state.timeLeft;
+                    updateStats();
+                    
+                    if (this.state.timeLeft <= 0) {
+                        clearInterval(this.state.intervalId);
+                        const durationMs = Date.now() - this.state.startTime;
+                        callbacks.onGameEnd(this.state.correctWords, durationMs);
+                    }
+                }, 1000);
+                
+                showWord();
+            };
+        },
+        
+        cleanup: function() {
+            if (this.state.intervalId) clearInterval(this.state.intervalId);
+        }
+    };
+})();

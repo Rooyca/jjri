@@ -1,0 +1,42 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: games-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - games-db:/app/data
+    environment:
+      - DB_PATH=/app/data/juegos_jri.db
+    networks:
+      - games-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/games || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: games-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - games-network
+    restart: unless-stopped
+
+networks:
+  games-network:
+    driver: bridge
+
+volumes:
+  games-db:
