@@ -57,6 +57,7 @@
             container.innerHTML = `
                 <div class="game-header">
                     <h3>${config.title}</h3>
+                    <div class="score-display">Puntos: <span id="score-display">0</span></div>
                     <div class="timer">Tiempo: <span id="time-left">${this.state.timeLeft}</span>s</div>
                 </div>
                 <div class="quiz-container">
@@ -75,6 +76,7 @@
             const answerInput = container.querySelector('#answer-input');
             const feedback = container.querySelector('#feedback');
             const timeDisplay = container.querySelector('#time-left');
+            const scoreDisplay = container.querySelector('#score-display');
             
             const showNextProblem = () => {
                 this.state.currentProblem = this.generateProblem(
@@ -93,6 +95,7 @@
                 
                 if (userAnswer === this.state.currentProblem.answer) {
                     this.state.score++;
+                    scoreDisplay.textContent = this.state.score;
                     callbacks.onScoreUpdate(this.state.score);
                     feedback.className = 'score-feedback correct';
                     showNextProblem();
