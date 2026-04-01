@@ -1,5 +1,5 @@
 // DEV
-// const BASE_DIR = "127.0.0.1:8000";
+// const BASE_DIR = "192.168.0.101:8000";
 // const HTTPS_DIR = `http://${BASE_DIR}`
 // const CDN_BASE = `${HTTPS_DIR}/static/games`
 
@@ -20,6 +20,7 @@ window.playerName = playerName;
 
 let activeModule = null;
 let currentView = 'menu';
+let currentGameId = null;
 let loadedScripts = new Set();
 
 // DOM Elements
@@ -28,6 +29,13 @@ const playerNameInput = document.getElementById('player-name-input');
 const saveNameBtn = document.getElementById('save-name-btn');
 const playerNameDisplay = document.getElementById('player-name-display');
 const changeNameBtn = document.getElementById('change-name-btn');
+
+const gameOverModal = document.getElementById('game-over-modal');
+const gameOverScore = document.getElementById('game-over-score');
+const playAgainBtn = document.getElementById('play-again-btn');
+const backToMenuBtn = document.getElementById('back-to-menu-btn');
+const countdownOverlay = document.getElementById('countdown-overlay');
+const countdownNumber = document.getElementById('countdown-number');
 
 const menuView = document.getElementById('menu-view');
 const gameView = document.getElementById('game-view');
@@ -177,11 +185,13 @@ function loadGameScript(gameType) {
     });
 }
 
-async function launchGame(gameId) {
+async function launchGame(gameId, skipStartButton = false) {
     if (!playerName) {
         showNameModal();
         return;
     }
+    
+    currentGameId = gameId;
     
     try {
         const response = await fetch(`${API_BASE}/games/${gameId}`);
@@ -202,23 +212,78 @@ async function launchGame(gameId) {
             onScoreUpdate: (score) => { },
             onGameEnd: async (finalScore, durationMs) => {
                 await submitScore(config.id, finalScore, durationMs, "1.0");
-                
-                const playAgain = confirm(`Game Over! Puntaje: ${finalScore}\n\n¿Quieres volver a jugar?`);
-                if (playAgain) {
-                    launchGame(gameId);
-                } else {
-                    showMenu();
-                }
+                showGameOverModal(finalScore, gameId);
             }
         };
 
-        activeModule.start(config, gameContainer, callbacks);
+        // If skipStartButton is true, show countdown and start automatically
+        if (skipStartButton) {
+            activeModule.start(config, gameContainer, callbacks);
+            showCountdownAndStart(3);
+        } else {
+            activeModule.start(config, gameContainer, callbacks);
+        }
 
     } catch (error) {
         console.error("Error: ", error);
         alert('Ocurrió un error. Por favor, intenta más tarde');
         showMenu();
     }
+}
+
+function showGameOverModal(score, gameId) {
+    gameOverScore.textContent = `Puntaje: ${score}`;
+    gameOverModal.style.display = 'flex';
+    
+    currentGameId = gameId;
+    
+    // Remove any previous event listeners
+    const newPlayAgainBtn = playAgainBtn.cloneNode(true);
+    playAgainBtn.parentNode.replaceChild(newPlayAgainBtn, playAgainBtn);
+    const newBackToMenuBtn = backToMenuBtn.cloneNode(true);
+    backToMenuBtn.parentNode.replaceChild(newBackToMenuBtn, backToMenuBtn);
+    
+    // Add new event listeners
+    document.getElementById('play-again-btn').onclick = () => {
+        gameOverModal.style.display = 'none';
+        if (activeModule && activeModule.cleanup) activeModule.cleanup();
+        activeModule = null;
+        launchGame(currentGameId, true);
+    };
+    
+    document.getElementById('back-to-menu-btn').onclick = () => {
+        gameOverModal.style.display = 'none';
+        showMenu();
+    };
+}
+
+function showCountdownAndStart(seconds) {
+    countdownOverlay.style.display = 'flex';
+    countdownNumber.textContent = seconds;
+    
+    let count = seconds;
+    const countdownInterval = setInterval(() => {
+        count--;
+        if (count > 0) {
+            countdownNumber.textContent = count;
+            // Reset animation
+            countdownNumber.style.animation = 'none';
+            setTimeout(() => {
+                countdownNumber.style.animation = 'countdownPulse 1s ease-in-out';
+            }, 10);
+        } else {
+            countdownNumber.textContent = '¡GO!';
+            setTimeout(() => {
+                countdownOverlay.style.display = 'none';
+                // Click the start button programmatically
+                const startBtn = document.getElementById('start-btn');
+                if (startBtn) {
+                    startBtn.click();
+                }
+            }, 500);
+            clearInterval(countdownInterval);
+        }
+    }, 1000);
 }
 
 async function submitScore(gameId, score, durationMs, version) {

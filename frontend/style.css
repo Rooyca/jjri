@@ -283,7 +283,7 @@ main {
     height: 100%;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(5px);
-    display: flex;
+    display: none;
     justify-content: center;
     align-items: center;
     z-index: 1000;
@@ -354,13 +354,29 @@ main {
     border: 1px solid rgba(255, 255, 255, 0.1);
     max-height: calc(100vh - 280px);
     overflow: auto;
+
+    /* Hide scrollbar (Firefox + IE/Edge) */
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
 
+/* Hide scrollbar (Chrome, Safari, Edge) */
 .quiz-container::-webkit-scrollbar,
 .typing-container::-webkit-scrollbar {
     display: none;
+}
+
+/* Remove number input arrows (Chrome, Safari, Edge, Opera) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Remove number input arrows (Firefox) */
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 .problem-display {
@@ -503,7 +519,7 @@ main {
 
 .filter-controls select {
     padding: 10px 15px;
-    background: rgba(255, 255, 255, 0.1);
+    background: #434066;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 8px;
     color: white;
@@ -736,5 +752,108 @@ main {
     
     main {
         padding: 20px 30px;
+    }
+}
+
+/* Game Over Modal Styles */
+.game-over-content {
+    min-width: 400px;
+    animation: modalFadeIn 0.3s ease;
+}
+
+.game-over-score {
+    font-size: 1.8em !important;
+    font-weight: bold;
+    color: #667eea !important;
+    margin: 20px 0 !important;
+}
+
+.game-over-question {
+    font-size: 1.2em !important;
+    color: #fff !important;
+    margin: 20px 0 !important;
+}
+
+.game-over-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 30px;
+}
+
+.game-over-buttons .btn-primary,
+.game-over-buttons .btn-secondary {
+    flex: 1;
+    max-width: 180px;
+}
+
+/* Countdown Overlay Styles */
+.countdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.countdown-number {
+    font-size: 10em;
+    font-weight: bold;
+    background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: countdownPulse 1s ease-in-out;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes countdownPulse {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .game-over-content {
+        min-width: auto;
+        width: 90%;
+    }
+    
+    .game-over-buttons {
+        flex-direction: column;
+    }
+    
+    .game-over-buttons .btn-primary,
+    .game-over-buttons .btn-secondary {
+        max-width: 100%;
+    }
+    
+    .countdown-number {
+        font-size: 6em;
     }
 }
