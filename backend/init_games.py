@@ -52,6 +52,15 @@ def populate_games():
                 "duration_seconds": None,
                 "max_plausible_score": 200,
                 "settings": {"word_count": 30}
+            },
+            {
+                "game_id": "parchis",
+                "title": "Parchís",
+                "game_type": "parchis",
+                "icon": "🎲",
+                "duration_seconds": None,
+                "max_plausible_score": 100,
+                "settings": {"players": 4}
             }
         ]
         

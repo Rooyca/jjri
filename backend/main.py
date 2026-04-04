@@ -12,7 +12,7 @@ from crud import (
 )
 from config import CORS_ORIGINS, CORS_ALLOW_ALL, MIN_SCORE, MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
 from profanity_filter import validate_and_clean_username
-from websocket import handle_race_websocket
+from websocket import handle_race_websocket, handle_parchis_websocket
 
 app = FastAPI()
 
@@ -139,3 +139,8 @@ def get_typing_words(language: str = "es", db: Session = Depends(get_db)):
 async def race_websocket(websocket: WebSocket, player_name: str = "Player"):
     """WebSocket endpoint for multiplayer typing race matchmaking and gameplay."""
     await handle_race_websocket(websocket, player_name)
+
+@app.websocket("/ws/parchis")
+async def parchis_websocket(websocket: WebSocket, player_name: str = "Player"):
+    """WebSocket endpoint for 4-player Parchis game matchmaking and gameplay."""
+    await handle_parchis_websocket(websocket, player_name)
