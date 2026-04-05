@@ -14,7 +14,11 @@ from config import CORS_ORIGINS, CORS_ALLOW_ALL, MIN_SCORE, MIN_USERNAME_LENGTH,
 from profanity_filter import validate_and_clean_username
 from websocket import handle_race_websocket, handle_parchis_websocket
 
-app = FastAPI()
+app = FastAPI(
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None
+        )
 
 init_db()
 

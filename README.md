@@ -63,11 +63,6 @@ The platform currently includes five games, each with unique mechanics and scori
 
 ## Quick Start
 
-### Prerequisites
-
-- Docker Engine 20.10+
-- Docker Compose 2.0+
-
 ### Deployment
 
 ```bash
@@ -85,7 +80,6 @@ docker-compose down
 
 - Frontend: `http://localhost:8080`
 - Backend API: `http://localhost:8000`
-- API Documentation: `http://localhost:8000/docs`
 
 ## Project Structure
 
