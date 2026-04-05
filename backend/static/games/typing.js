@@ -114,9 +114,6 @@
             const showWord = () => {
                 if (wordDisplay && this.state.words && this.state.words.length > 0) {
                     TypingUtils.showWord(wordDisplay, this.state.words, this.state.currentWordIndex);
-                    if (progressBar) {
-                        progressBar.style.width = `${(this.state.currentWordIndex / this.state.words.length) * 100}%`;
-                    }
                 }
             };
             
@@ -191,6 +188,10 @@
                     this.state.elapsedTime++;
                     timeDisplay.textContent = this.state.timeLeft;
                     elapsedTimeDisplay.textContent = TypingUtils.formatTime(this.state.elapsedTime);
+                    
+                    if (progressBar) {
+                        progressBar.style.width = `${(this.state.elapsedTime / config.duration_seconds) * 100}%`;
+                    }
                     
                     if (this.state.timeLeft <= 0) {
                         clearInterval(this.state.intervalId);
