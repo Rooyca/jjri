@@ -7,7 +7,7 @@ from typing import Optional
 from database import get_db, init_db
 from schemas import ScoreSubmission, ScoreResponse, GameListItem, GameConfig
 from crud import (
-    get_game, get_all_games, get_player_score, 
+    get_game, get_all_games, get_player_score,
     create_score, update_score, get_leaderboard, get_all_words
 )
 from config import CORS_ORIGINS, CORS_ALLOW_ALL, MIN_SCORE, MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
@@ -28,6 +28,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
 @app.get("/api/games")
 def list_games(db: Session = Depends(get_db)):
     """Returns a lightweight list of games for the frontend launcher."""
@@ -36,6 +37,7 @@ def list_games(db: Session = Depends(get_db)):
         GameListItem(id=game.id, title=game.title, type=game.type, icon=game.icon)
         for game in games
     ]
+
 
 @app.get("/api/games/{game_id}")
 def get_game_config(game_id: str, db: Session = Depends(get_db)):
@@ -54,6 +56,7 @@ def get_game_config(game_id: str, db: Session = Depends(get_db)):
         settings=game.settings
     )
 
+
 @app.post("/api/scores")
 def submit_score(submission: ScoreSubmission, db: Session = Depends(get_db)):
     """Validates the score against the config and saves it to database."""
@@ -63,30 +66,27 @@ def submit_score(submission: ScoreSubmission, db: Session = Depends(get_db)):
 
     if submission.score > game.max_plausible_score:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Score rejected: Implausible result."
         )
-    
     if submission.score < MIN_SCORE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Score must be at least {MIN_SCORE} point(s)."
         )
-    
     clean_username = validate_and_clean_username(submission.player_name)
-    
+
     if len(clean_username) < MIN_USERNAME_LENGTH or len(clean_username) > MAX_USERNAME_LENGTH:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Username must be between {MIN_USERNAME_LENGTH} and {MAX_USERNAME_LENGTH} characters."
         )
-    
     existing_score = get_player_score(db, submission.game_id, clean_username)
-    
+
     if existing_score:
         if submission.score > existing_score.score:
             updated_score = update_score(
-                db, existing_score, submission.score, 
+                db, existing_score, submission.score,
                 submission.duration_ms, submission.game_version
             )
             return {
@@ -111,12 +111,13 @@ def submit_score(submission: ScoreSubmission, db: Session = Depends(get_db)):
             "id": new_score.id
         }
 
+
 @app.get("/api/leaderboard")
-def show_leaderboard(game_id: Optional[str] = None, limit: int = 10, 
+def show_leaderboard(game_id: Optional[str] = None, limit: int = 10,
                      db: Session = Depends(get_db)):
     """Get top scores, optionally filtered by game."""
     scores = get_leaderboard(db, game_id, limit)
-    
+
     return [
         ScoreResponse(
             game_id=score.game_id,
@@ -128,6 +129,7 @@ def show_leaderboard(game_id: Optional[str] = None, limit: int = 10,
         for score in scores
     ]
 
+
 @app.get("/api/games/speed-typing/words")
 def get_typing_words(language: str = "es", db: Session = Depends(get_db)):
     """Returns a list of words for the typing game from database."""
@@ -135,10 +137,12 @@ def get_typing_words(language: str = "es", db: Session = Depends(get_db)):
     words = [w.word for w in word_objects]
     return {"words": words}
 
+
 @app.websocket("/ws/race")
 async def race_websocket(websocket: WebSocket, player_name: str = "Player"):
     """WebSocket endpoint for multiplayer typing race matchmaking and gameplay."""
     await handle_race_websocket(websocket, player_name)
+
 
 @app.websocket("/ws/parchis")
 async def parchis_websocket(websocket: WebSocket, player_name: str = "Player"):

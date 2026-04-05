@@ -129,7 +129,7 @@ async function loadLeaderboard(gameId = '') {
         scores.forEach((score, index) => {
             const rank = index + 1;
             const rankClass = rank <= 3 ? `rank-${rank}` : 'rank-other';
-            const date = new Date(score.submitted_at).toLocaleString('en-US', {timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true});
+            const date = new Date(score.submitted_at).toLocaleString('en-US', {timeZone: 'America/Bogota'});
             
             html += `
                 <tr>

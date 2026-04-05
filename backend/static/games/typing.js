@@ -11,6 +11,12 @@
             return elapsedMinutes > 0 ? Math.round(correctWords / elapsedMinutes) : 0;
         },
 
+        formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
+        },
+
         showWord(wordDisplayEl, words, currentWordIndex) {
             if (currentWordIndex < words.length) {
                 wordDisplayEl.textContent = words[currentWordIndex];
@@ -53,7 +59,8 @@
             totalChars: 0,
             errors: 0,
             intervalId: null,
-            timeLeft: 0
+            timeLeft: 0,
+            elapsedTime: 0
         },
         
         start: async function(config, container, callbacks) {
@@ -62,6 +69,7 @@
             this.state.errors = 0;
             this.state.totalChars = 0;
             this.state.timeLeft = config.duration_seconds;
+            this.state.elapsedTime = 0;
             this.state.started = false;
             
             const API_BASE = window.API_BASE || `https://${window.location.host}/api`;
@@ -82,7 +90,7 @@
                     <button id="start-btn" class="btn-primary" style="font-size: 1.5em; padding: 20px 40px; display: block; margin: 0 auto;">Iniciar</button>
                     <div id="game-area" style="display: none;">
                         <div class="typing-stats">
-                            <div>PPM: <span id="wpm">0</span></div>
+                            <div>Tiempo: <span id="elapsed-time">0s</span></div>
                             <div>Precisión: <span id="accuracy">100</span>%</div>
                         </div>
                         <div class="word-display" id="word-display"></div>
@@ -98,7 +106,7 @@
             const gameArea = container.querySelector('#game-area');
             const wordDisplay = container.querySelector('#word-display');
             const typingInput = container.querySelector('#typing-input');
-            const wpmDisplay = container.querySelector('#wpm');
+            const elapsedTimeDisplay = container.querySelector('#elapsed-time');
             const accuracyDisplay = container.querySelector('#accuracy');
             const timeDisplay = container.querySelector('#time-left');
             const progressBar = container.querySelector('#progress');
@@ -115,14 +123,59 @@
             const updateStats = () => {
                 if (!this.state.startTime) return;
                 
-                const elapsedMinutes = (Date.now() - this.state.startTime) / 60000;
                 const accuracy = this.state.totalChars > 0 
                     ? Math.round(((this.state.totalChars - this.state.errors) / this.state.totalChars) * 100)
                     : 100;
                 
-                wpmDisplay.textContent = this.state.correctWords;
+                elapsedTimeDisplay.textContent = TypingUtils.formatTime(this.state.elapsedTime);
                 accuracyDisplay.textContent = accuracy;
             };
+
+            const advanceWord = () => {
+                const currentWord = this.state.words[this.state.currentWordIndex];
+                this.state.correctWords++;
+                this.state.totalChars += currentWord.length;
+                callbacks.onScoreUpdate(this.state.correctWords);
+                this.state.currentWordIndex++;
+                TypingUtils.clearInput(typingInput);
+                showWord();
+                updateStats();
+            };
+            
+            const handleInput = (e) => {
+                if (!this.state.started) return;
+                
+                const typed = e.target.value;
+                const currentWord = this.state.words[this.state.currentWordIndex];
+                
+                const validation = TypingUtils.validateInput(typed, currentWord);
+                
+                if (validation.isCorrect) {
+                    advanceWord();
+                } else {
+                    TypingUtils.applyInputFeedback(typingInput, validation);
+                    if (!validation.isPartialMatch && typed.length > 0) {
+                        this.state.errors++;
+                    }
+                }
+            };
+            
+            const handleKeydown = (e) => {
+                if (!this.state.started) return;
+                
+                if (e.key === ' ') {
+                    e.preventDefault();
+                    const typed = typingInput.value.trim();
+                    const currentWord = this.state.words[this.state.currentWordIndex];
+                    
+                    if (typed === currentWord) {
+                        advanceWord();
+                    }
+                }
+            };
+            
+            typingInput.addEventListener('input', handleInput);
+            typingInput.addEventListener('keydown', handleKeydown);
             
             startBtn.onclick = () => {
                 if (this.state.started) return;
@@ -133,56 +186,11 @@
                 gameArea.style.display = 'block';
                 typingInput.focus();
                 
-                typingInput.addEventListener('input', (e) => {
-                    const typed = e.target.value;
-                    const currentWord = this.state.words[this.state.currentWordIndex];
-                    
-                    const validation = TypingUtils.validateInput(typed, currentWord);
-                    
-                    if (validation.isCorrect) {
-                        setTimeout(() => {
-                            this.state.correctWords++;
-                            this.state.totalChars += currentWord.length;
-                            callbacks.onScoreUpdate(this.state.correctWords);
-                            this.state.currentWordIndex++;
-                            TypingUtils.clearInput(typingInput);
-                            showWord();
-                            updateStats();
-                        }, 10);
-                    } else {
-                        TypingUtils.applyInputFeedback(typingInput, validation);
-                        if (!validation.isPartialMatch) {
-                            this.state.errors++;
-                            updateStats();
-                        }
-                    }
-                });
-                
-                typingInput.addEventListener('keydown', (e) => {
-                    if (e.key === ' ') {
-                        e.preventDefault();
-                        const typed = typingInput.value;
-                        const currentWord = this.state.words[this.state.currentWordIndex];
-                        
-                        if (typed === currentWord) {
-                            typingInput.style.border = '3px solid #4ade80';
-                            setTimeout(() => {
-                                this.state.correctWords++;
-                                this.state.totalChars += currentWord.length;
-                                callbacks.onScoreUpdate(this.state.correctWords);
-                                this.state.currentWordIndex++;
-                                TypingUtils.clearInput(typingInput);
-                                showWord();
-                                updateStats();
-                            }, 200);
-                        }
-                    }
-                });
-                
                 this.state.intervalId = setInterval(() => {
                     this.state.timeLeft--;
+                    this.state.elapsedTime++;
                     timeDisplay.textContent = this.state.timeLeft;
-                    updateStats();
+                    elapsedTimeDisplay.textContent = TypingUtils.formatTime(this.state.elapsedTime);
                     
                     if (this.state.timeLeft <= 0) {
                         clearInterval(this.state.intervalId);
