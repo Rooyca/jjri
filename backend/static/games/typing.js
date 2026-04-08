@@ -90,7 +90,6 @@
                     <button id="start-btn" class="btn-primary" style="font-size: 1.5em; padding: 20px 40px; display: block; margin: 0 auto;">Iniciar</button>
                     <div id="game-area" style="display: none;">
                         <div class="typing-stats">
-                            <div>Tiempo: <span id="elapsed-time">0s</span></div>
                             <div>Precisión: <span id="accuracy">100</span>%</div>
                         </div>
                         <div class="word-display" id="word-display"></div>
