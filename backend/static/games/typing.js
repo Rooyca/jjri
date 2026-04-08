@@ -24,8 +24,10 @@
         },
 
         validateInput(typedText, currentWord) {
-            const isCorrect = typedText.toLowerCase() === currentWord;
-            const isPartialMatch = currentWord.startsWith(typedText.toLowerCase());
+            const tt = (typedText || '').toLowerCase();
+            const cw = (currentWord || '').toLowerCase();
+            const isCorrect = tt === cw;
+            const isPartialMatch = tt.length > 0 && cw.startsWith(tt);
             
             return {
                 isCorrect,
