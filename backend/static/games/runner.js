@@ -159,8 +159,8 @@
                         this.state.score++;
                         callbacks.onScoreUpdate(this.state.score);
  
-                        if (this.state.score % 10 === 0 && this.state.speed < 12) {
-                            this.state.speed += 0.3;
+                        if (this.state.score % 10 === 0 && this.state.speed < 100) {
+                            this.state.speed += 1;
                         }
                     }
  
