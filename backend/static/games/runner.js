@@ -170,7 +170,7 @@
                 ctx.fillStyle = '#000';
                 ctx.font = 'bold 24px system-ui';
                 ctx.textAlign = 'left';
-                ctx.fillText(`Distance: ${this.state.score}`, 20, 35);
+                ctx.fillText(`Puntaje: ${this.state.score}`, 20, 35);
  
                 this.state.animationId = requestAnimationFrame(gameLoop);
             };
