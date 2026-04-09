@@ -60,6 +60,16 @@ docker-compose down
 - Frontend: `http://localhost:8080`
 - Backend API: `http://localhost:8000`
 
+The frontend Nginx container also proxies backend traffic (`/api/*` and `/ws/*`) to the backend service, so production deployments can serve client and API traffic through a single entry point.
+
+### Backend Performance Tuning
+
+- SQLite is configured with WAL mode and a write busy timeout to improve concurrent API access.
+- Uvicorn runs with `uvloop` + `httptools` (`UVICORN_LOOP=auto`, `UVICORN_HTTP=auto`) for lower request overhead.
+- Worker count is configurable via `BACKEND_WORKERS` (default `1` in `docker-compose.yml`).
+
+**Important:** multiplayer matchmaking state is currently stored in-memory (`websocket.py`). Running multiple workers or multiple backend containers can split queues/rooms across processes and break matchmaking unless shared state (for example Redis) is introduced.
+
 ### Adding New Games
 
 To register a new game:

@@ -11,6 +11,9 @@ services:
       - games-db:/app/data
     environment:
       - DB_PATH=/app/data/juegos_jri.db
+      - BACKEND_WORKERS=1
+      - UVICORN_LOOP=auto
+      - UVICORN_HTTP=auto
     networks:
       - games-network
     restart: unless-stopped

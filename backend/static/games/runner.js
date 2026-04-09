@@ -14,7 +14,7 @@
             animationId: null,
             gameOver: false,
             started: false,
-            speed: 7,
+            speed: 9,
             gravity: 0.6,
             jumpPower: -12,
             ground: 0,
@@ -27,7 +27,7 @@
             this.state.gameOver     = false;
             this.state.started      = false;
             this.state.obstacles    = [];
-            this.state.speed        = 7;
+            this.state.speed        = 9;
             this.state.gravity      = 0.6; 
             this.state.lastSpawnTime = 0;
  
@@ -159,8 +159,8 @@
                         this.state.score++;
                         callbacks.onScoreUpdate(this.state.score);
  
-                        if (this.state.score % 10 === 0 && this.state.speed < 100) {
-                            this.state.speed += 1;
+                        if (this.state.score % 5 === 0 && this.state.speed < 500) {
+                            this.state.speed += 2;
                         }
                     }
  
