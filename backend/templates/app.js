@@ -1,11 +1,11 @@
 // DEV
-const BASE_DIR = "192.168.0.100:8000";
-const HTTPS_DIR = `http://${BASE_DIR}`
-const CDN_BASE = `${HTTPS_DIR}/static/games`
+// const BASE_DIR = "192.168.0.100:8000";
+// const HTTPS_DIR = `http://${BASE_DIR}`
+// const CDN_BASE = `${HTTPS_DIR}/static/games`
 
-// const BASE_DIR = [...atob(atob('V0V0YVF3UlNIeGdFWDBFPQ=='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
-// const HTTPS_DIR = `https://${BASE_DIR}`;
-// const CDN_BASE = [...atob(atob('UWw1ZVdsa1FCUVZKVGtRRVFGbE9UMFpEWEZnRVJFOWVCVTFDQlZoRlJWTkpTd1ZBUUZoRGFrZExXVjVQV0FWSVMwbEJUMFJPQlZsZVMxNURTUVZOUzBkUFdRPT0='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
+const BASE_DIR = [...atob(atob('V0V0YVF3UlNIeGdFWDBFPQ=='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
+const HTTPS_DIR = `https://${BASE_DIR}`;
+const CDN_BASE = [...atob(atob('UWw1ZVdsa1FCUVZKVGtRRVFGbE9UMFpEWEZnRVJFOWVCVTFDQlZoRlJWTkpTd1ZBUUZoRGFrZExXVjVQV0FWSVMwbEJUMFJPQlZsZVMxNURTUVZOUzBkUFdRPT0='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
 
 const API_BASE = `${HTTPS_DIR}/api`;
 

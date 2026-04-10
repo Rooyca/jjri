@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, status, Depends, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+# from fastapi.staticfiles import StaticFiles
+# from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -13,6 +15,8 @@ from crud import (
 from config import CORS_ORIGINS, CORS_ALLOW_ALL, MIN_SCORE, MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
 from profanity_filter import validate_and_clean_username
 from websocket import handle_race_websocket, handle_parchis_websocket
+from pathlib import Path
+from functools import lru_cache
 
 app = FastAPI(
         docs_url=None,
@@ -20,6 +24,7 @@ app = FastAPI(
         openapi_url=None
         )
 
+# templates = Jinja2Templates(directory="templates")
 init_db()
 
 app.add_middleware(
@@ -30,7 +35,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static")
+
+TEMPLATES = Path("templates")
+
+# @app.get("/", response_class=HTMLResponse)
+# async def root(request: Request):
+#     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@lru_cache(maxsize=1)
+def build_page() -> str:
+    html = (TEMPLATES/"index.html").read_text()
+    css  = (TEMPLATES/"style.css").read_text()
+    js   = (TEMPLATES/"app.js").read_text()
+    html = html.replace('<link rel="stylesheet" href="style.css">', f"<style>{css}</style>")
+    html = html.replace('<script src="app.js"></script>', f"<script>{js}</script>")
+    return html
+
+
+@app.get("/page", response_class=HTMLResponse)
+async def get_full_page():
+    return HTMLResponse(content=build_page())
 
 
 @app.get("/api/games")
@@ -43,13 +69,20 @@ def list_games(db: Session = Depends(get_db)):
     ]
 
 
+@app.get("/api/games/speed-typing/words")
+def get_typing_words(language: str = "es", db: Session = Depends(get_db)):
+    """Returns a list of words for the typing game from database."""
+    word_objects = get_all_words(db, language=language)
+    words = [w.word for w in word_objects]
+    return {"words": words}
+
+
 @app.get("/api/games/{game_id}")
 def get_game_config(game_id: str, db: Session = Depends(get_db)):
     """Returns the full JSON config for a specific game."""
     game = get_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
     return GameConfig(
         id=game.id,
         title=game.title,
@@ -132,14 +165,6 @@ def show_leaderboard(game_id: Optional[str] = None, limit: int = 10,
         )
         for score in scores
     ]
-
-
-@app.get("/api/games/speed-typing/words")
-def get_typing_words(language: str = "es", db: Session = Depends(get_db)):
-    """Returns a list of words for the typing game from database."""
-    word_objects = get_all_words(db, language=language)
-    words = [w.word for w in word_objects]
-    return {"words": words}
 
 
 @app.websocket("/ws/race")
