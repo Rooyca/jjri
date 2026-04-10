@@ -3,7 +3,7 @@
 // const HTTPS_DIR = `http://${BASE_DIR}`
 // const CDN_BASE = `${HTTPS_DIR}/static/games`
 
-const BASE_DIR = [...atob(atob('V0V0YVF3UlNIeGdFWDBFPQ=='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
+const BASE_DIR = [...atob(atob('V0VWRUJGSWZHQVJmUVE9PQ=='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
 const HTTPS_DIR = `https://${BASE_DIR}`;
 const CDN_BASE = [...atob(atob('UWw1ZVdsa1FCUVZKVGtRRVFGbE9UMFpEWEZnRVJFOWVCVTFDQlZoRlJWTkpTd1ZBUUZoRGFrZExXVjVQV0FWSVMwbEJUMFJPQlZsZVMxNURTUVZOUzBkUFdRPT0='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
 
