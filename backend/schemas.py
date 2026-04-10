@@ -33,3 +33,10 @@ class GameConfig(BaseModel):
     duration_seconds: Optional[int]
     max_plausible_score: int
     settings: Dict[str, Any]
+
+
+class AuthUserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None

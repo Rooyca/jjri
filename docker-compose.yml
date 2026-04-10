@@ -14,6 +14,10 @@ services:
       - BACKEND_WORKERS=1
       - UVICORN_LOOP=auto
       - UVICORN_HTTP=auto
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY:-change-this-in-production}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
     networks:
       - games-network
     restart: unless-stopped

@@ -1,18 +1,28 @@
-from fastapi import FastAPI, HTTPException, status, Depends, WebSocket
+from fastapi import FastAPI, HTTPException, status, Depends, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.base_client.errors import OAuthError
 # from fastapi.staticfiles import StaticFiles
 # from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from database import get_db, init_db
-from schemas import ScoreSubmission, ScoreResponse, GameListItem, GameConfig
+from schemas import ScoreSubmission, ScoreResponse, GameListItem, GameConfig, AuthUserResponse
 from crud import (
     get_game, get_all_games, get_player_score,
-    create_score, update_score, get_leaderboard, get_all_words
+    create_score, update_score, get_leaderboard, get_all_words,
+    upsert_google_user, get_user_by_id
 )
-from config import CORS_ORIGINS, CORS_ALLOW_ALL, MIN_SCORE, MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
+from config import (
+    CORS_ORIGINS, CORS_ALLOW_ALL, MIN_SCORE, MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH,
+    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET_KEY, SESSION_COOKIE_SECURE
+)
 from profanity_filter import validate_and_clean_username
 from websocket import handle_race_websocket, handle_parchis_websocket
 from pathlib import Path
@@ -34,10 +44,48 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET_KEY,
+    same_site="lax",
+    https_only=SESSION_COOKIE_SECURE,
+)
 
 # app.mount("/static", StaticFiles(directory="static"), name="static")
 
 TEMPLATES = Path("templates")
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+oauth = OAuth()
+if GOOGLE_OAUTH_ENABLED:
+    oauth.register(
+        name="google",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+
+def get_current_user(request: Request, db: Session):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    user = get_user_by_id(db, int(user_id))
+    if not user:
+        request.session.clear()
+        return None
+    return user
+
+
+def resolve_authenticated_player_name(user) -> str:
+    """Build a valid leaderboard name from authenticated user data."""
+    raw_name = (user.full_name or user.email.split("@")[0] or "Usuario").strip()
+    if len(raw_name) > MAX_USERNAME_LENGTH:
+        raw_name = raw_name[:MAX_USERNAME_LENGTH]
+    clean_name = validate_and_clean_username(raw_name)
+    if len(clean_name) < MIN_USERNAME_LENGTH:
+        clean_name = "Usuario"
+    return clean_name
 
 # @app.get("/", response_class=HTMLResponse)
 # async def root(request: Request):
@@ -58,6 +106,90 @@ def build_page() -> str:
 @app.get("/page", response_class=HTMLResponse)
 async def get_full_page():
     return HTMLResponse(content=build_page())
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, db: Session = Depends(get_db)):
+    if get_current_user(request, db):
+        return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    return HTMLResponse(content=(TEMPLATES / "login.html").read_text())
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request, db: Session = Depends(get_db)):
+    if get_current_user(request, db):
+        return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    return HTMLResponse(content=(TEMPLATES / "register.html").read_text())
+
+
+@app.get("/auth/google/login")
+async def auth_google_login(request: Request):
+    if not GOOGLE_OAUTH_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth is not configured.",
+        )
+    redirect_uri = str(request.url_for("auth_google_callback"))
+    return await oauth.google.authorize_redirect(request, redirect_uri, prompt="select_account")
+
+
+@app.get("/auth/google/callback", name="auth_google_callback")
+async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
+    if not GOOGLE_OAUTH_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth is not configured.",
+        )
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except OAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Google auth failed: {exc.error}",
+        ) from exc
+
+    userinfo = token.get("userinfo")
+    if not userinfo:
+        userinfo = await oauth.google.parse_id_token(request, token)
+    if not userinfo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing Google user info.")
+
+    email = userinfo.get("email")
+    sub = userinfo.get("sub")
+    email_verified = bool(userinfo.get("email_verified"))
+    if not email or not sub:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google email not available.")
+    if not email_verified:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google email is not verified.")
+
+    user = upsert_google_user(
+        db=db,
+        email=email,
+        provider_subject=sub,
+        full_name=userinfo.get("name"),
+        avatar_url=userinfo.get("picture"),
+    )
+    request.session["user_id"] = user.id
+    return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request):
+    request.session.clear()
+    return JSONResponse(content={"status": "success"})
+
+
+@app.get("/api/auth/me", response_model=AuthUserResponse)
+def get_auth_me(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return AuthUserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        avatar_url=user.avatar_url
+    )
 
 
 @app.get("/api/games")
@@ -96,7 +228,7 @@ def get_game_config(game_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/scores")
-def submit_score(submission: ScoreSubmission, db: Session = Depends(get_db)):
+def submit_score(submission: ScoreSubmission, request: Request, db: Session = Depends(get_db)):
     """Validates the score against the config and saves it to database."""
     game = get_game(db, submission.game_id)
     if not game:
@@ -112,7 +244,9 @@ def submit_score(submission: ScoreSubmission, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Score must be at least {MIN_SCORE} point(s)."
         )
-    clean_username = validate_and_clean_username(submission.player_name)
+    user = get_current_user(request, db)
+    score_owner_name = resolve_authenticated_player_name(user) if user else "Anónimo"
+    clean_username = validate_and_clean_username(score_owner_name)
 
     if len(clean_username) < MIN_USERNAME_LENGTH or len(clean_username) > MAX_USERNAME_LENGTH:
         raise HTTPException(

@@ -70,6 +70,28 @@ The frontend Nginx container also proxies backend traffic (`/api/*` and `/ws/*`)
 
 **Important:** multiplayer matchmaking state is currently stored in-memory (`websocket.py`). Running multiple workers or multiple backend containers can split queues/rooms across processes and break matchmaking unless shared state (for example Redis) is introduced.
 
+### Google Authentication (FastAPI)
+
+The backend includes Google OAuth login/registration pages:
+
+- `/login`
+- `/register`
+
+Anonymous play is enabled by default: unauthenticated users play and submit scores as `Anónimo`.  
+When a user logs in with Google, scores are stored under their authenticated profile name.
+
+Set these environment variables in the backend service:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `SESSION_SECRET_KEY` (required in production)
+- `SESSION_COOKIE_SECURE=true` (recommended in production with HTTPS)
+
+Google callback URL must point to:
+
+- `http://localhost:8000/auth/google/callback` (local backend)
+- or your deployed backend domain with `/auth/google/callback`
+
 ### Adding New Games
 
 To register a new game:

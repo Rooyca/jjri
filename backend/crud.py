@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timezone
 from typing import List, Optional
-from models import Score, Game, Word
+from models import Score, Game, Word, User
 from sqlalchemy.dialects.sqlite import insert 
 
 def get_game(db: Session, game_id: str) -> Optional[Game]:
@@ -104,3 +104,53 @@ def bulk_create_words(db: Session, words: List[str], language: str = "es",
     ]
     db.bulk_save_objects(word_objects)
     db.commit()
+
+
+def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
+    """Get a user by ID."""
+    return db.query(User).filter(User.id == user_id).first()
+
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    """Get a user by email."""
+    return db.query(User).filter(User.email == email).first()
+
+
+def upsert_google_user(
+    db: Session,
+    email: str,
+    provider_subject: str,
+    full_name: Optional[str] = None,
+    avatar_url: Optional[str] = None
+) -> User:
+    """Create or update a Google-authenticated user."""
+    existing_by_subject = db.query(User).filter(User.provider_subject == provider_subject).first()
+    if existing_by_subject:
+        existing_by_subject.email = email
+        existing_by_subject.full_name = full_name
+        existing_by_subject.avatar_url = avatar_url
+        db.commit()
+        db.refresh(existing_by_subject)
+        return existing_by_subject
+
+    existing_by_email = get_user_by_email(db, email)
+    if existing_by_email:
+        existing_by_email.provider = "google"
+        existing_by_email.provider_subject = provider_subject
+        existing_by_email.full_name = full_name
+        existing_by_email.avatar_url = avatar_url
+        db.commit()
+        db.refresh(existing_by_email)
+        return existing_by_email
+
+    user = User(
+        email=email,
+        full_name=full_name,
+        provider="google",
+        provider_subject=provider_subject,
+        avatar_url=avatar_url,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user

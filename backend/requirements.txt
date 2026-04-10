@@ -7,3 +7,7 @@ pydantic==2.12.5
 better-profanity==0.7.0
 websockets==16.0
 jinja2==3.1.6
+authlib==1.6.0
+itsdangerous==2.2.0
+httpx==0.28.1
+python-dotenv

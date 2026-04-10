@@ -42,3 +42,22 @@ class Word(Base):
     word = Column(String, nullable=False, unique=True, index=True)
     language = Column(String, default="es")
     category = Column(String, nullable=True)
+
+
+class User(Base):
+    """Registered users authenticated with external providers."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    full_name = Column(String, nullable=True)
+    provider = Column(String, nullable=False, default="google")
+    provider_subject = Column(String, nullable=False, unique=True, index=True)
+    avatar_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        index=True
+    )

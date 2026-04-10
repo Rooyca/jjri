@@ -7,7 +7,8 @@ const BASE_DIR = [...atob(atob('V0VWRUJGSWZHQVJmUVE9PQ=='))].map(c => String.fro
 const HTTPS_DIR = `https://${BASE_DIR}`;
 const CDN_BASE = [...atob(atob('UWw1ZVdsa1FCUVZKVGtRRVFGbE9UMFpEWEZnRVJFOWVCVTFDQlZoRlJWTkpTd1ZBUUZoRGFrZExXVjVQV0FWSVMwbEJUMFJPQlZsZVMxNURTUVZOUzBkUFdRPT0='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
 
-const API_BASE = `${HTTPS_DIR}/api`;
+// Use same-origin API endpoints so auth session cookies are always sent correctly.
+const API_BASE = '/api';
 
 // Make these globally accessible for game modules
 window.BASE_DIR = BASE_DIR;
@@ -15,7 +16,8 @@ window.API_BASE = API_BASE;
 window.CDN_BASE = CDN_BASE;
 window.GameModules = {};
 
-let playerName = localStorage.getItem('playerName') || '';
+let playerName = 'Anónimo';
+let currentUser = null;
 window.playerName = playerName;
 
 let activeModule = null;
@@ -24,11 +26,9 @@ let currentGameId = null;
 let loadedScripts = new Set();
 
 // DOM Elements
-const nameModal = document.getElementById('name-modal');
-const playerNameInput = document.getElementById('player-name-input');
-const saveNameBtn = document.getElementById('save-name-btn');
 const playerNameDisplay = document.getElementById('player-name-display');
-const changeNameBtn = document.getElementById('change-name-btn');
+const authBtn = document.getElementById('change-name-btn');
+const playerLabel = document.querySelector('.player-label');
 
 const gameOverModal = document.getElementById('game-over-modal');
 const gameOverScore = document.getElementById('game-over-score');
@@ -46,35 +46,63 @@ const gameContainer = document.getElementById('game-container');
 
 const tabBtns = document.querySelectorAll('.tab-btn');
 
-// Player Name Management
-function showNameModal() {
-    nameModal.style.display = 'flex';
-    playerNameInput.value = playerName;
-    playerNameInput.focus();
+function derivePlayerNameFromAuth(user) {
+    const fallback = 'Usuario';
+    const raw = (user.full_name || (user.email ? user.email.split('@')[0] : fallback) || fallback).trim();
+    return raw.slice(0, 20) || fallback;
 }
 
-function hideNameModal() {
-    nameModal.style.display = 'none';
-}
-
-function saveName() {
-    const name = playerNameInput.value.trim();
-    if (name && (name.length > 1 && name.length < 20)) {
-        playerName = name;
-        window.playerName = name;
-        localStorage.setItem('playerName', name);
-        playerNameDisplay.textContent = name;
-        hideNameModal();
+function updatePlayerBadge() {
+    playerLabel.textContent = '';
+    playerNameDisplay.textContent = playerName;
+    if (currentUser) {
+        authBtn.textContent = '🚪';
+        authBtn.title = 'Cerrar sesión';
     } else {
-        alert('El nombre debe tener mínimo 2 carácteres y máximo 20');
+        authBtn.textContent = '🔐';
+        authBtn.title = 'Iniciar sesión';
     }
 }
 
-saveNameBtn.addEventListener('click', saveName);
-playerNameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') saveName();
+async function syncAuthState() {
+    try {
+        const response = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+        if (!response.ok) {
+            currentUser = null;
+            playerName = 'Anónimo';
+            window.playerName = playerName;
+            updatePlayerBadge();
+            return;
+        }
+        currentUser = await response.json();
+        playerName = derivePlayerNameFromAuth(currentUser);
+        window.playerName = playerName;
+        updatePlayerBadge();
+    } catch (err) {
+        currentUser = null;
+        playerName = 'Anónimo';
+        window.playerName = playerName;
+        updatePlayerBadge();
+    }
+}
+
+authBtn.addEventListener('click', async () => {
+    if (!currentUser) {
+        window.location.href = '/login';
+        return;
+    }
+    try {
+        await fetch('/auth/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+    } finally {
+        currentUser = null;
+        playerName = 'Anónimo';
+        window.playerName = playerName;
+        updatePlayerBadge();
+    }
 });
-changeNameBtn.addEventListener('click', showNameModal);
 
 // View Management
 function switchView(viewName) {
@@ -186,11 +214,6 @@ function loadGameScript(gameType) {
 }
 
 async function launchGame(gameId, skipStartButton = false) {
-    if (!playerName) {
-        showNameModal();
-        return;
-    }
-    
     currentGameId = gameId;
     
     try {
@@ -315,12 +338,8 @@ function showMenu() {
 }
 
 async function init() {
-    if (!playerName) {
-        showNameModal();
-    } else {
-        playerNameDisplay.textContent = playerName;
-    }
-    
+    await syncAuthState();
+
     try {
         const response = await fetch(`${API_BASE}/games`);
         const games = await response.json();
