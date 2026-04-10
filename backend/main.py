@@ -27,12 +27,16 @@ from profanity_filter import validate_and_clean_username
 from websocket import handle_race_websocket, handle_parchis_websocket
 from pathlib import Path
 from functools import lru_cache
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
 
 app = FastAPI(
         docs_url=None,
         redoc_url=None,
         openapi_url=None
         )
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # templates = Jinja2Templates(directory="templates")
 init_db()
