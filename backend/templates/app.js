@@ -82,11 +82,11 @@ async function syncAuthState() {
 
 authBtn.addEventListener('click', async () => {
     if (!currentUser) {
-        window.location.href = '/login';
+        window.location.href = `${HTTPS_DIR}/login`;
         return;
     }
     try {
-        await fetch('/auth/logout', {
+        await fetch(`${HTTPS_DIR}/auth/logout`, {
             method: 'POST',
             credentials: 'include'
         });
