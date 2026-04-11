@@ -6,7 +6,7 @@ CORS_ORIGINS = [
 ]
 
 # Allow all origins for development
-CORS_ALLOW_ALL = True
+CORS_ALLOW_ALL = False
 
 # Database
 DB_NAME = "juegos_jri.db"
