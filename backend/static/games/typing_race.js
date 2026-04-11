@@ -62,13 +62,22 @@
         },
 
         start: function(config, container, callbacks) {
+            // Ensure stale sockets/timers from a previous race cannot leak into a new matchmaking session
+            this.cleanup();
+
             const playerName = window.playerName || "Player";
             this.state.playerName = playerName;
+            this.state.words = [];
             this.state.currentWordIndex = 0;
             this.state.correctWords = 0;
+            this.state.startTime = null;
+            this.state.intervalId = null;
+            this.state.roomId = null;
             this.state.opponentProgress = 0;
             this.state.opponentWpm = 0;
+            this.state.lastProgressSent = 0;
             this.state.isRacing = false;
+            this.state.currentWpm = 0;
             
             container.innerHTML = `
                 <div class="game-header">
@@ -366,9 +375,14 @@
             
             if (this.state.intervalId) {
                 clearInterval(this.state.intervalId);
+                this.state.intervalId = null;
             }
             
             if (this.state.ws) {
+                this.state.ws.onopen = null;
+                this.state.ws.onmessage = null;
+                this.state.ws.onerror = null;
+                this.state.ws.onclose = null;
                 this.state.ws.close();
                 this.state.ws = null;
             }
