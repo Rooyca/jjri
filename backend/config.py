@@ -18,6 +18,6 @@ MAX_USERNAME_LENGTH = 20
 
 # Auth
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "change-this-in-production")
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")

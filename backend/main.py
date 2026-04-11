@@ -4,8 +4,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.base_client.errors import OAuthError
-# from fastapi.staticfiles import StaticFiles
-# from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -29,18 +27,18 @@ from pathlib import Path
 from functools import lru_cache
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-
 app = FastAPI(
         docs_url=None,
         redoc_url=None,
         openapi_url=None
         )
 
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
-
-# templates = Jinja2Templates(directory="templates")
 init_db()
 
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts="*"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if CORS_ALLOW_ALL else CORS_ORIGINS,
@@ -48,14 +46,13 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET_KEY,
     same_site="lax",
     https_only=SESSION_COOKIE_SECURE,
 )
-
-# app.mount("/static", StaticFiles(directory="static"), name="static")
 
 TEMPLATES = Path("templates")
 GOOGLE_OAUTH_ENABLED = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
@@ -90,10 +87,6 @@ def resolve_authenticated_player_name(user) -> str:
     if len(clean_name) < MIN_USERNAME_LENGTH:
         clean_name = "Usuario"
     return clean_name
-
-# @app.get("/", response_class=HTMLResponse)
-# async def root(request: Request):
-#     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @lru_cache(maxsize=1)

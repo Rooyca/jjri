@@ -9,6 +9,8 @@ services:
       - "8000:8000"
     volumes:
       - games-db:/app/data
+    env_file:
+      - backend/.env
     environment:
       - DB_PATH=/app/data/juegos_jri.db
       - BACKEND_WORKERS=1
