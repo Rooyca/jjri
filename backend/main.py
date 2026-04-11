@@ -22,7 +22,7 @@ from config import (
     GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET_KEY, SESSION_COOKIE_SECURE
 )
 from profanity_filter import validate_and_clean_username
-from websocket import handle_race_websocket, handle_parchis_websocket
+from websocket import handle_race_websocket, handle_parchis_websocket, handle_chatroom_websocket
 from pathlib import Path
 from functools import lru_cache
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -309,3 +309,9 @@ async def race_websocket(websocket: WebSocket, player_name: str = "Player"):
 async def parchis_websocket(websocket: WebSocket, player_name: str = "Player"):
     """WebSocket endpoint for 4-player Parchis game matchmaking and gameplay."""
     await handle_parchis_websocket(websocket, player_name)
+
+
+@app.websocket("/ws/chatroom")
+async def chatroom_websocket(websocket: WebSocket, player_name: str = "Player"):
+    """WebSocket endpoint for shared chatroom."""
+    await handle_chatroom_websocket(websocket, player_name)

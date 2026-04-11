@@ -10,6 +10,136 @@ from crud import get_all_words, create_score, update_score, get_player_score
 from database import SessionLocal
 
 
+# ============ CHATROOM CLASSES ============
+
+@dataclass
+class ChatParticipant:
+    """Represents a connected chat user."""
+    websocket: WebSocket
+    name: str
+
+
+class ChatroomManager:
+    """Tracks active chat users and message history."""
+
+    def __init__(self):
+        self.clients: Dict[WebSocket, ChatParticipant] = {}
+        self.history: List[Dict] = []
+        self.max_history = 100
+        self.lock = asyncio.Lock()
+
+    async def add_client(self, websocket: WebSocket, player_name: str):
+        async with self.lock:
+            participant = ChatParticipant(websocket=websocket, name=player_name)
+            self.clients[websocket] = participant
+            history_copy = list(self.history)
+            online_count = len(self.clients)
+            return participant, history_copy, online_count
+
+    async def remove_client(self, websocket: WebSocket):
+        async with self.lock:
+            participant = self.clients.pop(websocket, None)
+            online_count = len(self.clients)
+            return participant, online_count
+
+    async def record_message(self, payload: dict):
+        async with self.lock:
+            self.history.append(payload)
+            if len(self.history) > self.max_history:
+                self.history = self.history[-self.max_history:]
+
+    async def broadcast(self, payload: dict):
+        async with self.lock:
+            recipients = list(self.clients.keys())
+
+        stale_connections = []
+        for websocket in recipients:
+            try:
+                await websocket.send_json(payload)
+            except (RuntimeError, WebSocketDisconnect):
+                stale_connections.append(websocket)
+
+        if stale_connections:
+            async with self.lock:
+                for websocket in stale_connections:
+                    self.clients.pop(websocket, None)
+
+
+# Global chatroom instance
+chatroom_manager = ChatroomManager()
+
+
+async def handle_chatroom_websocket(websocket: WebSocket, player_name: str):
+    """
+    Main WebSocket handler for a shared chatroom.
+    Broadcasts user messages and presence updates to all connected clients.
+    """
+    await websocket.accept()
+
+    clean_name = (player_name or "Player").strip()[:20]
+    if not clean_name:
+        clean_name = "Player"
+
+    participant, history, online_count = await chatroom_manager.add_client(websocket, clean_name)
+
+    await websocket.send_json({
+        "type": "history",
+        "messages": history,
+        "online_count": online_count
+    })
+
+    join_message = {
+        "type": "system",
+        "sender": "Sistema",
+        "text": f"{participant.name} se unió al chat",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    await chatroom_manager.record_message(join_message)
+    await chatroom_manager.broadcast(join_message)
+    await chatroom_manager.broadcast({"type": "online", "online_count": online_count})
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+
+            if data.get("type") != "message":
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Unsupported message type"
+                })
+                continue
+
+            text = (data.get("text") or "").strip()
+            if not text:
+                continue
+
+            message = {
+                "type": "message",
+                "sender": participant.name,
+                "text": text[:250],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+            await chatroom_manager.record_message(message)
+            await chatroom_manager.broadcast(message)
+
+    except WebSocketDisconnect:
+        pass
+
+    finally:
+        left_participant, online_count = await chatroom_manager.remove_client(websocket)
+        if left_participant:
+            leave_message = {
+                "type": "system",
+                "sender": "Sistema",
+                "text": f"{left_participant.name} salió del chat",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            await chatroom_manager.record_message(leave_message)
+            await chatroom_manager.broadcast(leave_message)
+            await chatroom_manager.broadcast({"type": "online", "online_count": online_count})
+
+
 # ============ PARCHIS GAME CLASSES ============
 
 @dataclass

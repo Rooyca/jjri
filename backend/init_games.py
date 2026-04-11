@@ -52,6 +52,15 @@ def populate_games():
                 "duration_seconds": None,
                 "max_plausible_score": 200,
                 "settings": {"word_count": 30}
+            },
+            {
+                "game_id": "chat-room",
+                "title": "Chat Room",
+                "game_type": "chatroom",
+                "icon": "💬",
+                "duration_seconds": None,
+                "max_plausible_score": 1,
+                "settings": {"max_message_length": 250}
             }
         ]
         

@@ -1,20 +1,16 @@
-from pathlib import Path
 from database import init_db, SessionLocal
-from crud import get_all_games, get_all_words
+from crud import get_all_words
 from init_games import populate_games
 from init_words import populate_words
 
-def should_initialize_db():
-    """Check if database needs initialization."""
+def should_populate_words():
+    """Only seed words when the list is empty."""
     db = SessionLocal()
     try:
-        # Check if games exist
-        games = get_all_games(db)
         words = get_all_words(db)
-        return len(games) == 0 or len(words) == 0
+        return len(words) == 0
     except Exception as e:
-        # If tables don't exist or any error, initialize
-        print(f"Database check failed, will initialize: {e}")
+        print(f"Words check failed, will initialize: {e}")
         return True
     finally:
         db.close()
@@ -27,17 +23,18 @@ def initialize_database():
     init_db()
     print("Database schema created.")
     
-    # Check if we need to populate
-    if should_initialize_db():
-        print("Populating games...")
-        populate_games()
-        
+    # Sync games on each startup (upsert in create_game keeps this idempotent)
+    print("Populating games...")
+    populate_games()
+
+    # Seed words only once to avoid duplicates
+    if should_populate_words():
         print("Populating words...")
         populate_words()
-        
-        print("Database initialization complete!")
     else:
-        print("Database already populated, skipping initialization.")
+        print("Words already populated, skipping words initialization.")
+
+    print("Database initialization complete!")
 
 if __name__ == "__main__":
     initialize_database()
