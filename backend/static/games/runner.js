@@ -14,7 +14,7 @@
             animationId: null,
             gameOver: false,
             started: false,
-            speed: 9,
+            speed: 7,
             gravity: 0.6,
             jumpPower: -12,
             ground: 0,
@@ -27,9 +27,10 @@
             this.state.gameOver     = false;
             this.state.started      = false;
             this.state.obstacles    = [];
-            this.state.speed        = 9;
+            this.state.speed        = 7;
             this.state.gravity      = 0.6; 
             this.state.lastSpawnTime = 0;
+            this.state.nextSpawnInterval = 2200;
  
             container.innerHTML = `
                 <div class="game-header">
@@ -47,7 +48,6 @@
             
             const scaleCanvas = () => {
                 const rect = this.state.canvas.getBoundingClientRect();
-                const scale = window.devicePixelRatio || 1;
                 this.state.canvas.style.width = rect.width + 'px';
                 this.state.canvas.style.height = rect.height + 'px';
             };
@@ -88,10 +88,7 @@
             const spawnObstacle = (timestamp) => {
                 if (this.state.gameOver || !this.state.started) return;
  
-                const difficultyLevel  = Math.floor(this.state.score / 10);
-                const baseIntervalMs   = Math.max(900, 2200 - difficultyLevel * 150);
- 
-                if (timestamp - this.state.lastSpawnTime >= baseIntervalMs) {
+                if (timestamp - this.state.lastSpawnTime >= this.state.nextSpawnInterval) {
                     const height = 30 + Math.random() * 40;
                     const width  = 20 + Math.random() * 20;
  
@@ -104,6 +101,11 @@
                     });
  
                     this.state.lastSpawnTime = timestamp;
+ 
+                    const difficultyLevel = Math.floor(this.state.score / 10);
+                    const baseIntervalMs  = Math.max(900, 2200 - difficultyLevel * 150);
+                    const jitter          = baseIntervalMs * 0.4;
+                    this.state.nextSpawnInterval = baseIntervalMs + (Math.random() * jitter * 2 - jitter);
                 }
             };
  

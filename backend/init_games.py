@@ -10,7 +10,7 @@ def populate_games():
         games_config = [
             {
                 "game_id": "speed-maths",
-                "title": "Speed Maths",
+                "title": "MateRush",
                 "game_type": "quiz",
                 "icon": "🧮",
                 "duration_seconds": 60,
@@ -19,7 +19,7 @@ def populate_games():
             },
             {
                 "game_id": "dino-game",
-                "title": "Dino Game",
+                "title": "CuboSalto",
                 "game_type": "runner",
                 "icon": "🦖",
                 "duration_seconds": None,
@@ -28,7 +28,7 @@ def populate_games():
             },
             {
                 "game_id": "speed-typing",
-                "title": "Speed Typing",
+                "title": "MecaRush",
                 "game_type": "typing",
                 "icon": "⌨️",
                 "duration_seconds": 60,
@@ -37,7 +37,7 @@ def populate_games():
             },
             {
                 "game_id": "block-stacker",
-                "title": "Block Stacker",
+                "title": "TorreZ",
                 "game_type": "stacker",
                 "icon": "🧱",
                 "duration_seconds": None,
@@ -46,7 +46,7 @@ def populate_games():
             },
             {
                 "game_id": "typing-race",
-                "title": "Typing Race",
+                "title": "TeclasPvP",
                 "game_type": "typing_race",
                 "icon": "🏁",
                 "duration_seconds": None,
@@ -55,7 +55,7 @@ def populate_games():
             },
             {
                 "game_id": "chat-room",
-                "title": "Chat Room",
+                "title": "Chat",
                 "game_type": "chatroom",
                 "icon": "💬",
                 "duration_seconds": None,

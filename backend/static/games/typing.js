@@ -92,7 +92,7 @@
                     <button id="start-btn" class="btn-primary" style="font-size: 1.5em; padding: 20px 40px; display: block; margin: 0 auto;">Iniciar</button>
                     <div id="game-area" style="display: none;">
                         <div class="typing-stats">
-                            <div>Tiempo: <span id="elapsed-time">0s</span></div>
+                            <div>Palabras: <span id="word-count">0</span></div>
                             <div>Precisión: <span id="accuracy">100</span>%</div>
                         </div>
                         <div class="word-display" id="word-display"></div>
@@ -108,7 +108,7 @@
             const gameArea = container.querySelector('#game-area');
             const wordDisplay = container.querySelector('#word-display');
             const typingInput = container.querySelector('#typing-input');
-            const elapsedTimeDisplay = container.querySelector('#elapsed-time');
+            const elapsedTimeDisplay = container.querySelector('#word-count');
             const accuracyDisplay = container.querySelector('#accuracy');
             const timeDisplay = container.querySelector('#time-left');
             const progressBar = container.querySelector('#progress');
@@ -126,7 +126,7 @@
                     ? Math.round(((this.state.totalChars - this.state.errors) / this.state.totalChars) * 100)
                     : 100;
                 
-                elapsedTimeDisplay.textContent = TypingUtils.formatTime(this.state.elapsedTime);
+                elapsedTimeDisplay.textContent = this.state.correctWords;
                 accuracyDisplay.textContent = accuracy;
             };
 
@@ -189,7 +189,6 @@
                     this.state.timeLeft--;
                     this.state.elapsedTime++;
                     timeDisplay.textContent = this.state.timeLeft;
-                    elapsedTimeDisplay.textContent = TypingUtils.formatTime(this.state.elapsedTime);
                     
                     if (progressBar) {
                         progressBar.style.width = `${(this.state.elapsedTime / config.duration_seconds) * 100}%`;
@@ -211,4 +210,3 @@
         }
     };
 })();
-
