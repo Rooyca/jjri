@@ -5,6 +5,45 @@
     window.GameModules = window.GameModules || {};
     
     window.GameModules['runner'] = {
+        playSound: function(type) {
+            if (!this.state.audioContext) {
+                this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            const ctx = this.state.audioContext;
+            const now = ctx.currentTime;
+            
+            if (type === 'jump') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'collision') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+        },
+        
         state: {
             canvas: null,
             ctx: null,
@@ -19,7 +58,8 @@
             jumpPower: -12,
             ground: 0,
             lastSpawnTime: 0,  
-            keyHandler: null
+            keyHandler: null,
+            audioContext: null
         },
  
         start: function(config, container, callbacks) {
@@ -66,6 +106,7 @@
                 if (this.state.player.onGround && !this.state.gameOver && this.state.started) {
                     this.state.player.velocityY = this.state.jumpPower;
                     this.state.player.onGround  = false;
+                    this.playSound('jump');
                 }
             };
  
@@ -153,6 +194,7 @@
                         player.y + player.height  > obs.y
                     ) {
                         this.state.gameOver = true;
+                        this.playSound('collision');
                         callbacks.onGameEnd(this.state.score, Date.now());
                         return false;
                     }

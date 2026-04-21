@@ -5,6 +5,59 @@
     window.GameModules = window.GameModules || {};
     
     window.GameModules['stacker'] = {
+        playSound: function(type) {
+            if (!this.state.audioContext) {
+                this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            const ctx = this.state.audioContext;
+            const now = ctx.currentTime;
+            
+            if (type === 'drop') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'success') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'fail') {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(80, now + 0.4);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        },
+
         state: {
             canvas: null,
             ctx: null,
@@ -21,6 +74,7 @@
             targetCameraOffset: 0,
             keyHandler: null,
             blockHeight: 30,
+            audioContext: null,
             colors: ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#1abc9c', '#3498db', '#9b59b6', '#e91e63']
         },
  
@@ -89,9 +143,10 @@
             const drop = () => {
                 if (!s.started || s.gameOver || s.waiting) return;
                 s.waiting = true;
- 
+                this.playSound('drop');
+
                 const worldY = 30 + s.cameraOffset;
- 
+
                 s.fallingBlock = {
                     x:         s.movingBlock.x,
                     y:         worldY,
@@ -121,18 +176,19 @@
             const land = () => {
                 const fb  = s.fallingBlock;
                 const top = s.tower[s.tower.length - 1];
- 
+
                 const overlapLeft  = Math.max(fb.x, top.x);
                 const overlapRight = Math.min(fb.x + fb.width, top.x + top.width);
                 const overlap      = overlapRight - overlapLeft;
- 
+
                 if (overlap <= 0) {
                     s.gameOver = true;
                     s.fallingBlock = null;
+                    this.playSound('fail');
                     callbacks.onGameEnd(s.score, Date.now());
                     return;
                 }
- 
+
                 if (overlap < fb.width) {
                     const cutX    = fb.x < top.x ? fb.x : overlapRight;
                     const cutW    = fb.width - overlap;
@@ -145,7 +201,7 @@
                         color:     fb.color
                     };
                 }
- 
+
                 s.tower.push({
                     x:      overlapLeft,
                     y:      top.y - BH,
@@ -153,20 +209,21 @@
                     height: BH,
                     color:  fb.color
                 });
- 
+
                 s.fallingBlock = null;
                 s.score++;
+                this.playSound('success');
                 callbacks.onScoreUpdate(s.score);
- 
+
                 s.movingBlock.speed = Math.min(12, 3 + Math.floor(s.score / 5) * 0.5);
- 
+
                 const newTop = s.tower[s.tower.length - 1];
                 s.targetCameraOffset = newTop.y - 100;
- 
+
                 s.movingBlock.width     = overlap;
                 s.movingBlock.x         = 0;
                 s.movingBlock.direction = 1;
- 
+
                 s.waiting = false;
             };
  
