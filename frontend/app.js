@@ -1,13 +1,15 @@
 // DEV
 const BASE_DIR = "192.168.0.100:8000";
-const HTTPS_DIR = `http://${BASE_DIR}`
-const CDN_BASE = `${HTTPS_DIR}/static/games`
+const HTTPS_DIR = `http://${BASE_DIR}`;
+const CDN_BASE = `${HTTPS_DIR}/static/games`;
 
 // const BASE_DIR = [...atob(atob('V0V0YVF3UlNIeGdFWDBFPQ=='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
 // const HTTPS_DIR = `https://${BASE_DIR}`;
 // const CDN_BASE = [...atob(atob('UWw1ZVdsa1FCUVZKVGtRRVFGbE9UMFpEWEZnRVJFOWVCVTFDQlZoRlJWTkpTd1ZBUUZoRGFrZExXVjVQV0FWSVMwbEJUMFJPQlZsZVMxNURTUVZOUzBkUFdRPT0='))].map(c => String.fromCharCode(c.charCodeAt() ^ 42)).join('');
 
 const API_BASE = `${HTTPS_DIR}/api`;
+const LOCALE = 'es-CO';
+const BOGOTA_TIMEZONE = 'America/Bogota';
 
 // Make these globally accessible for game modules
 window.BASE_DIR = BASE_DIR;
@@ -21,7 +23,9 @@ window.playerName = playerName;
 let activeModule = null;
 let currentView = 'menu';
 let currentGameId = null;
-let loadedScripts = new Set();
+const loadedScripts = new Set();
+let activeModal = null;
+let lastFocusedElement = null;
 
 // DOM Elements
 const nameModal = document.getElementById('name-modal');
@@ -46,15 +50,153 @@ const gameContainer = document.getElementById('game-container');
 
 const tabBtns = document.querySelectorAll('.tab-btn');
 
+function clearElement(element) {
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+}
+
+function getFocusableElements(container) {
+    return [...container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.disabled && el.offsetParent !== null);
+}
+
+function isEditableTarget(target) {
+    if (!(target instanceof HTMLElement)) return false;
+
+    const tagName = target.tagName;
+    return target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+}
+
+function openModal(modal, initialFocusElement = null) {
+    lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    activeModal = modal;
+
+    const focusables = getFocusableElements(modal);
+    const firstFocus = initialFocusElement || focusables[0];
+    if (firstFocus) {
+        firstFocus.focus();
+    }
+}
+
+function closeModal(modal, restoreFocus = true) {
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+
+    if (activeModal === modal) {
+        activeModal = null;
+    }
+
+    if (restoreFocus && lastFocusedElement) {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+    }
+}
+
+document.addEventListener('keydown', (event) => {
+    if (activeModal) {
+        if (event.key === 'Escape') {
+            if (activeModal === nameModal && !playerName) return;
+
+            if (activeModal === nameModal) {
+                hideNameModal();
+            } else if (activeModal === gameOverModal) {
+                hideGameOverModal();
+            }
+            return;
+        }
+
+        if (activeModal === gameOverModal && event.key === 'Enter') {
+            event.preventDefault();
+            playAgainBtn.click();
+            return;
+        }
+
+        if (event.key !== 'Tab') return;
+
+        const focusables = getFocusableElements(activeModal);
+        if (focusables.length === 0) return;
+
+        const firstElement = focusables[0];
+        const lastElement = focusables[focusables.length - 1];
+
+        if (event.shiftKey && document.activeElement === firstElement) {
+            event.preventDefault();
+            lastElement.focus();
+            return;
+        }
+
+        if (!event.shiftKey && document.activeElement === lastElement) {
+            event.preventDefault();
+            firstElement.focus();
+        }
+        return;
+    }
+
+    if (currentView !== 'game') return;
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+    if (isEditableTarget(event.target)) return;
+
+    const startBtn = document.getElementById('start-btn');
+    if (!startBtn || startBtn.offsetParent === null) return;
+    if (startBtn.disabled) return;
+
+    event.preventDefault();
+    startBtn.click();
+});
+
+async function apiRequest(path, options = {}) {
+    const {
+        method = 'GET',
+        query = null,
+        body = null,
+        headers = {}
+    } = options;
+
+    const url = new URL(`${API_BASE}${path}`);
+
+    if (query) {
+        Object.entries(query).forEach(([key, value]) => {
+            if (value !== '' && value !== null && value !== undefined) {
+                url.searchParams.set(key, value);
+            }
+        });
+    }
+
+    const requestOptions = {
+        method,
+        headers: { ...headers }
+    };
+
+    if (body !== null) {
+        requestOptions.headers['Content-Type'] = 'application/json';
+        requestOptions.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(url.toString(), requestOptions);
+
+    if (!response.ok) {
+        throw new Error(`La solicitud falló (${response.status})`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+        return response.json();
+    }
+
+    return response.text();
+}
+
 // Player Name Management
 function showNameModal() {
-    nameModal.style.display = 'flex';
     playerNameInput.value = playerName;
-    playerNameInput.focus();
+    openModal(nameModal, playerNameInput);
 }
 
 function hideNameModal() {
-    nameModal.style.display = 'none';
+    closeModal(nameModal);
 }
 
 function saveName() {
@@ -66,7 +208,7 @@ function saveName() {
         playerNameDisplay.textContent = name;
         hideNameModal();
     } else {
-        alert('El nombre debe tener mínimo 2 carácteres y máximo 20');
+        alert('El nombre debe tener mínimo 2 caracteres y máximo 20.');
     }
 }
 
@@ -112,40 +254,79 @@ tabBtns.forEach(btn => {
 // Leaderboard
 async function loadLeaderboard(gameId = '') {
     const content = document.getElementById('leaderboard-content');
-    content.innerHTML = '<p>Cargando...</p>';
+    content.textContent = 'Cargando...';
     
     try {
-        const url = gameId ? `${API_BASE}/leaderboard?game_id=${gameId}&limit=20` : `${API_BASE}/leaderboard?limit=20`;
-        const response = await fetch(url);
-        const scores = await response.json();
+        const scores = await apiRequest('/leaderboard', {
+            query: {
+                game_id: gameId,
+                limit: 20
+            }
+        });
+
+        clearElement(content);
         
         if (scores.length === 0) {
-            content.innerHTML = '<p style="color: #aaa;">Aún no hay puntuación</p>';
+            const emptyMessage = document.createElement('p');
+            emptyMessage.style.color = '#aaa';
+            emptyMessage.textContent = 'Aún no hay puntuaciones.';
+            content.appendChild(emptyMessage);
             return;
         }
-        
-        let html = '<table class="leaderboard-table"><thead><tr><th>Posición</th><th>Nombre</th><th>Juego</th><th>Puntaje</th><th>Fecha</th></tr></thead><tbody>';
-        
+
+        const table = document.createElement('table');
+        table.className = 'leaderboard-table';
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['Posición', 'Nombre', 'Juego', 'Puntaje', 'Fecha'].forEach((text) => {
+            const th = document.createElement('th');
+            th.textContent = text;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
         scores.forEach((score, index) => {
             const rank = index + 1;
             const rankClass = rank <= 3 ? `rank-${rank}` : 'rank-other';
-            const date = new Date(score.submitted_at).toLocaleString('en-US', {timeZone: 'America/Bogota'});
-            
-            html += `
-                <tr>
-                    <td><span class="rank-badge ${rankClass}">${rank}</span></td>
-                    <td>${score.player_name}</td>
-                    <td>${score.game_id}</td>
-                    <td><strong>${score.score}</strong></td>
-                    <td>${date}</td>
-                </tr>
-            `;
+            const date = new Date(score.submitted_at).toLocaleString(LOCALE, { timeZone: BOGOTA_TIMEZONE });
+
+            const row = document.createElement('tr');
+
+            const rankCell = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = `rank-badge ${rankClass}`;
+            badge.textContent = String(rank);
+            rankCell.appendChild(badge);
+
+            const nameCell = document.createElement('td');
+            nameCell.textContent = score.player_name;
+
+            const gameCell = document.createElement('td');
+            gameCell.textContent = score.game_id;
+
+            const scoreCell = document.createElement('td');
+            const strong = document.createElement('strong');
+            strong.textContent = String(score.score);
+            scoreCell.appendChild(strong);
+
+            const dateCell = document.createElement('td');
+            dateCell.textContent = date;
+
+            row.appendChild(rankCell);
+            row.appendChild(nameCell);
+            row.appendChild(gameCell);
+            row.appendChild(scoreCell);
+            row.appendChild(dateCell);
+            tbody.appendChild(row);
         });
-        
-        html += '</tbody></table>';
-        content.innerHTML = html;
+
+        table.appendChild(tbody);
+        content.appendChild(table);
     } catch (err) {
-        content.innerHTML = '<p class="error">Error al cargar la tabla</p>';
+        content.textContent = 'Error al cargar la tabla.';
     }
 }
 
@@ -194,8 +375,7 @@ async function launchGame(gameId, skipStartButton = false) {
     currentGameId = gameId;
     
     try {
-        const response = await fetch(`${API_BASE}/games/${gameId}`);
-        const config = await response.json();
+        const config = await apiRequest(`/games/${gameId}`);
 
         await loadGameScript(config.type);
         
@@ -211,7 +391,7 @@ async function launchGame(gameId, skipStartButton = false) {
         const callbacks = {
             onScoreUpdate: (score) => { },
             onGameEnd: async (finalScore, durationMs) => {
-                await submitScore(config.id, finalScore, durationMs, "1.0");
+                await submitScore(config.id, finalScore, durationMs, '1.0');
                 showGameOverModal(finalScore, gameId);
             }
         };
@@ -225,36 +405,20 @@ async function launchGame(gameId, skipStartButton = false) {
         }
 
     } catch (error) {
-        console.error("Error: ", error);
-        alert('Ocurrió un error. Por favor, intenta más tarde');
+        console.error('Error:', error);
+        alert('Ocurrió un error. Por favor, inténtalo más tarde.');
         showMenu();
     }
 }
 
 function showGameOverModal(score, gameId) {
     gameOverScore.textContent = `Puntaje: ${score}`;
-    gameOverModal.style.display = 'flex';
-    
     currentGameId = gameId;
-    
-    // Remove any previous event listeners
-    const newPlayAgainBtn = playAgainBtn.cloneNode(true);
-    playAgainBtn.parentNode.replaceChild(newPlayAgainBtn, playAgainBtn);
-    const newBackToMenuBtn = backToMenuBtn.cloneNode(true);
-    backToMenuBtn.parentNode.replaceChild(newBackToMenuBtn, backToMenuBtn);
-    
-    // Add new event listeners
-    document.getElementById('play-again-btn').onclick = () => {
-        gameOverModal.style.display = 'none';
-        if (activeModule && activeModule.cleanup) activeModule.cleanup();
-        activeModule = null;
-        launchGame(currentGameId, true);
-    };
-    
-    document.getElementById('back-to-menu-btn').onclick = () => {
-        gameOverModal.style.display = 'none';
-        showMenu();
-    };
+    openModal(gameOverModal, playAgainBtn);
+}
+
+function hideGameOverModal() {
+    closeModal(gameOverModal);
 }
 
 function showCountdownAndStart(seconds) {
@@ -298,13 +462,12 @@ async function submitScore(gameId, score, durationMs, version) {
     };
 
     try {
-        await fetch(`${API_BASE}/scores`, {
+        await apiRequest('/scores', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: payload
         });
     } catch (err) {
-        console.error("Failed to send the score", err);
+        console.error('No se pudo enviar el puntaje:', err);
     }
 }
 
@@ -315,6 +478,9 @@ function showMenu() {
 }
 
 async function init() {
+    nameModal.setAttribute('aria-hidden', 'true');
+    gameOverModal.setAttribute('aria-hidden', 'true');
+
     if (!playerName) {
         showNameModal();
     } else {
@@ -322,12 +488,18 @@ async function init() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/games`);
-        const games = await response.json();
+        const games = await apiRequest('/games');
         
-        gameList.innerHTML = '';
+        clearElement(gameList);
         
         const filterSelect = document.getElementById('leaderboard-filter');
+        filterSelect.innerHTML = '';
+
+        const allGamesOption = document.createElement('option');
+        allGamesOption.value = '';
+        allGamesOption.textContent = 'Todos';
+        filterSelect.appendChild(allGamesOption);
+
         games.forEach(game => {
             const option = document.createElement('option');
             option.value = game.id;
@@ -338,17 +510,37 @@ async function init() {
         games.forEach(game => {
             const btn = document.createElement('button');
             btn.className = 'game-card';
+            btn.type = 'button';
+            btn.setAttribute('aria-label', `Iniciar ${game.title}`);
             
-            btn.innerHTML = `
-                <div id="game-icon">${game.icon || '🎮'}</div>
-                <div id="game-title">${game.title}</div>
-            `;
+            const icon = document.createElement('div');
+            icon.className = 'game-icon';
+            icon.textContent = game.icon || '🎮';
+
+            const title = document.createElement('div');
+            title.className = 'game-title';
+            title.textContent = game.title;
+
+            btn.appendChild(icon);
+            btn.appendChild(title);
             btn.onclick = () => launchGame(game.id);
             gameList.appendChild(btn);
         });
     } catch (err) {
-        gameList.innerHTML = `<p class="error">Error de conexión con el servidor</p>`;
+        gameList.textContent = 'Error de conexión con el servidor.';
     }
 }
+
+playAgainBtn.addEventListener('click', () => {
+    hideGameOverModal();
+    if (activeModule && activeModule.cleanup) activeModule.cleanup();
+    activeModule = null;
+    launchGame(currentGameId, true);
+});
+
+backToMenuBtn.addEventListener('click', () => {
+    hideGameOverModal();
+    showMenu();
+});
 
 init();

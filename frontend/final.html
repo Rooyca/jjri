@@ -1,28 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Juegos Jri</title>
+    <title>Juegos JRI</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <!-- Player Name Modal -->
-    <div id="name-modal" class="modal">
+    <div id="name-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="name-modal-title" aria-describedby="name-modal-description">
         <div class="modal-content">
-            <h2>🎮 ¡Bienvenido a Juegos Jri! 🎮</h2>
-            <p>Ingresa tu nombre:</p>
+            <h2 id="name-modal-title">🎮 ¡Bienvenido a Juegos JRI! 🎮</h2>
+            <p id="name-modal-description">Ingresa tu nombre:</p>
+            <label for="player-name-input" class="sr-only">Nombre del jugador</label>
             <input type="text" id="player-name-input" placeholder="Tu nombre..." maxlength="20" autofocus>
             <button id="save-name-btn" class="btn-primary">Jugar</button>
         </div>
     </div>
 
     <!-- Game Over Modal -->
-    <div id="game-over-modal" class="modal">
+    <div id="game-over-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="game-over-title" aria-describedby="game-over-question">
         <div class="modal-content game-over-content">
-            <h2>🎮 Game Over! 🎮</h2>
-            <p id="game-over-score" class="game-over-score"></p>
-            <p class="game-over-question">¿Quieres volver a jugar?</p>
+            <h2 id="game-over-title">🎮 ¡Juego terminado! 🎮</h2>
+            <p id="game-over-score" class="game-over-score" aria-live="polite"></p>
+            <p id="game-over-question" class="game-over-question">¿Quieres volver a jugar?</p>
             <div class="game-over-buttons">
                 <button id="play-again-btn" class="btn-primary">Sí, jugar de nuevo</button>
                 <button id="back-to-menu-btn" class="btn-secondary">Volver al menú</button>
@@ -31,25 +32,25 @@
     </div>
 
     <!-- Countdown Overlay -->
-    <div id="countdown-overlay" class="countdown-overlay" style="display: none;">
+    <div id="countdown-overlay" class="countdown-overlay" style="display: none;" aria-live="assertive" aria-atomic="true">
         <div id="countdown-number" class="countdown-number"></div>
     </div>
 
     <header>
         <div>
-            <h1>🎮 Juegos Jri 🎮</h1>
+            <h1>🎮 Juegos JRI 🎮</h1>
             <p class="subtitle">Jugar. Competir. Ganar.</p>
         </div>
         <div class="header-right">
             <div id="player-info" class="player-badge">
                 <span class="player-label"></span>
                 <span id="player-name-display" class="player-name"></span>
-                <button id="change-name-btn" class="btn-icon" title="Cambiar nombre">✏️</button>
+                <button id="change-name-btn" class="btn-icon" title="Cambiar nombre" aria-label="Cambiar nombre">✏️</button>
             </div>
         </div>
     </header>
 
-    <nav class="nav-tabs">
+    <nav class="nav-tabs" aria-label="Navegación principal">
         <button class="tab-btn active" data-view="menu">Juegos</button>
         <button class="tab-btn" data-view="leaderboard">Tablas</button>
     </nav>
@@ -63,7 +64,7 @@
         <section id="leaderboard-view" class="view-section hidden">
             <h2>🏆 Tablas</h2>
             <div class="filter-controls">
-                <label>Filtrar por juegos:</label>
+                <label for="leaderboard-filter">Filtrar por juegos:</label>
                 <select id="leaderboard-filter">
                     <option value="">Todos</option>
                 </select>
