@@ -328,6 +328,10 @@
                 if (s.started) return;
                 s.started = true;
                 startBtn.style.display = 'none';
+                const keyboardHint = container.querySelector('.keyboard-hint');
+                if (keyboardHint) {
+                    keyboardHint.style.display = 'none';
+                }
                 s.animationId = requestAnimationFrame(gameLoop);
             };
         },

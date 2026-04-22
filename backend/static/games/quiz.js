@@ -112,6 +112,10 @@
                 startTime = Date.now();
                 
                 startBtn.style.display = 'none';
+                const keyboardHint = container.querySelector('.keyboard-hint');
+                if (keyboardHint) {
+                    keyboardHint.style.display = 'none';
+                }
                 gameArea.style.display = 'block';
                 
                 answerInput.addEventListener('keypress', (e) => {

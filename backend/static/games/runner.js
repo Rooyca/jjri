@@ -224,6 +224,10 @@
                 if (this.state.started) return;
                 this.state.started = true;
                 startBtn.style.display = 'none';
+                const keyboardHint = container.querySelector('.keyboard-hint');
+                if (keyboardHint) {
+                    keyboardHint.style.display = 'none';
+                }
  
                 this.state.animationId = requestAnimationFrame(gameLoop);
             };
