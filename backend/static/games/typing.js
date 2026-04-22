@@ -89,6 +89,7 @@
                     <div class="timer">Tiempo: <span id="time-left">${this.state.timeLeft}</span>s</div>
                 </div>
                 <div class="typing-container">
+                    <p class="keyboard-hint">Presiona Enter o Espacio para iniciar</p>
                     <button id="start-btn" class="btn-primary" style="font-size: 1.5em; padding: 20px 40px; display: block; margin: 0 auto;">Iniciar</button>
                     <div id="game-area" style="display: none;">
                         <div class="typing-stats">

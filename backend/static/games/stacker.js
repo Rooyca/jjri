@@ -102,6 +102,7 @@
                     <div class="game-instructions">Presiona Espacio o Click para soltar el bloque.</div>
                 </div>
                 <div style="position: relative;">
+                    <p class="keyboard-hint game-start-hint">Presiona Enter o Espacio para iniciar</p>
                     <canvas id="gameCanvas" width="800" height="400"></canvas>
                     <button id="start-btn" class="btn-primary" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5em; padding: 20px 40px; z-index: 10;">Iniciar</button>
                 </div>

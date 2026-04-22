@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, status, Depends, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.base_client.errors import OAuthError
@@ -117,6 +117,11 @@ async def register_page(request: Request, db: Session = Depends(get_db)):
     if get_current_user(request, db):
         return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     return HTMLResponse(content=(TEMPLATES / "register.html").read_text())
+
+
+@app.get("/style.css")
+async def style_css():
+    return FileResponse(TEMPLATES / "style.css", media_type="text/css")
 
 
 @app.get("/auth/google/login")

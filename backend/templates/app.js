@@ -40,6 +40,63 @@ const gameContainer = document.getElementById('game-container');
 
 const tabBtns = document.querySelectorAll('.tab-btn');
 
+function isElementVisible(element) {
+    if (!element) return false;
+    return window.getComputedStyle(element).display !== 'none';
+}
+
+function isTextInputFocused() {
+    const active = document.activeElement;
+    if (!active) return false;
+    const tagName = active.tagName;
+    return tagName === 'INPUT' || tagName === 'TEXTAREA' || active.isContentEditable;
+}
+
+function handleStartRestartShortcut(e) {
+    const isShortcut = e.code === 'Space' || e.key === 'Enter';
+    if (!isShortcut || isTextInputFocused()) return;
+
+    const isGameOverOpen = isElementVisible(gameOverModal);
+    if (isGameOverOpen) {
+        const playAgain = document.getElementById('play-again-btn');
+        if (playAgain) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            playAgain.click();
+        }
+        return;
+    }
+
+    if (currentView !== 'game') return;
+    if (isElementVisible(countdownOverlay)) return;
+
+    const startBtn = document.getElementById('start-btn');
+    if (isElementVisible(startBtn) && !startBtn.disabled) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        startBtn.click();
+    }
+}
+
+document.addEventListener('keydown', handleStartRestartShortcut);
+
+function restartCurrentGame() {
+    gameOverModal.style.display = 'none';
+    if (activeModule && activeModule.cleanup) activeModule.cleanup();
+    activeModule = null;
+    if (currentGameId) {
+        launchGame(currentGameId, true);
+    }
+}
+
+function backToMenuFromGameOver() {
+    gameOverModal.style.display = 'none';
+    showMenu();
+}
+
+playAgainBtn.addEventListener('click', restartCurrentGame);
+backToMenuBtn.addEventListener('click', backToMenuFromGameOver);
+
 function derivePlayerNameFromAuth(user) {
     const fallback = 'Usuario';
     const raw = (user.full_name || (user.email ? user.email.split('@')[0] : fallback) || fallback).trim();
@@ -253,25 +310,6 @@ function showGameOverModal(score, gameId) {
     gameOverModal.style.display = 'flex';
     
     currentGameId = gameId;
-    
-    // Remove any previous event listeners
-    const newPlayAgainBtn = playAgainBtn.cloneNode(true);
-    playAgainBtn.parentNode.replaceChild(newPlayAgainBtn, playAgainBtn);
-    const newBackToMenuBtn = backToMenuBtn.cloneNode(true);
-    backToMenuBtn.parentNode.replaceChild(newBackToMenuBtn, backToMenuBtn);
-    
-    // Add new event listeners
-    document.getElementById('play-again-btn').onclick = () => {
-        gameOverModal.style.display = 'none';
-        if (activeModule && activeModule.cleanup) activeModule.cleanup();
-        activeModule = null;
-        launchGame(currentGameId, true);
-    };
-    
-    document.getElementById('back-to-menu-btn').onclick = () => {
-        gameOverModal.style.display = 'none';
-        showMenu();
-    };
 }
 
 function showCountdownAndStart(seconds) {
@@ -353,8 +391,8 @@ async function init() {
             btn.className = 'game-card';
             
             btn.innerHTML = `
-                <div id="game-icon">${game.icon || '🎮'}</div>
-                <div id="game-title">${game.title}</div>
+                <div class="game-icon">${game.icon || '🎮'}</div>
+                <div class="game-title">${game.title}</div>
             `;
             btn.onclick = () => launchGame(game.id);
             gameList.appendChild(btn);
