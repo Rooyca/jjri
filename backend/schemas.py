@@ -4,10 +4,19 @@ from typing import Optional, Dict, Any
 class ScoreSubmission(BaseModel):
     """Score submission from client."""
     game_id: str
-    player_name: str
+    attempt_id: str
     score: int
     duration_ms: int
     game_version: str
+
+
+class GameAttemptStartRequest(BaseModel):
+    game_id: str
+
+
+class GameAttemptStartResponse(BaseModel):
+    attempt_id: str
+    expires_at: str
 
 class ScoreResponse(BaseModel):
     """Score response to client."""

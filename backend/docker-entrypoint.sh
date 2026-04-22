@@ -17,5 +17,7 @@ exec uvicorn main:app \
   --host 0.0.0.0 \
   --port 8000 \
   --workers "${WORKERS}" \
+  --proxy-headers \
+  --forwarded-allow-ips "*" \
   --loop "${UVICORN_LOOP}" \
   --http "${UVICORN_HTTP}"

@@ -17,7 +17,10 @@ window.playerName = playerName;
 let activeModule = null;
 let currentView = 'menu';
 let currentGameId = null;
+let currentGameAttemptId = null;
 let loadedScripts = new Set();
+const requestCache = new Map();
+const REQUEST_TIMEOUT_MS = 10000;
 
 // DOM Elements
 const playerNameDisplay = document.getElementById('player-name-display');
@@ -30,6 +33,9 @@ const playAgainBtn = document.getElementById('play-again-btn');
 const backToMenuBtn = document.getElementById('back-to-menu-btn');
 const countdownOverlay = document.getElementById('countdown-overlay');
 const countdownNumber = document.getElementById('countdown-number');
+const anonScoreModal = document.getElementById('anon-score-modal');
+const anonLoginBtn = document.getElementById('anon-login-btn');
+const anonCloseBtn = document.getElementById('anon-close-btn');
 
 const menuView = document.getElementById('menu-view');
 const gameView = document.getElementById('game-view');
@@ -39,6 +45,99 @@ const gameList = document.getElementById('game-list');
 const gameContainer = document.getElementById('game-container');
 
 const tabBtns = document.querySelectorAll('.tab-btn');
+
+function makeRequestId() {
+    return `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function resolveErrorMessage(error, fallback = 'Ocurrió un error. Intenta de nuevo.') {
+    if (!error) return fallback;
+    if (typeof error === 'string') return error;
+    if (error.detail) return error.detail;
+    if (error.message) return error.message;
+    return fallback;
+}
+
+async function apiRequest(url, options = {}) {
+    const {
+        method = 'GET',
+        timeoutMs = REQUEST_TIMEOUT_MS,
+        retries = method === 'GET' ? 1 : 0,
+        cacheTtlMs = 0,
+        body,
+        headers = {}
+    } = options;
+
+    const cacheKey = `${method}:${url}`;
+    if (method === 'GET' && cacheTtlMs > 0) {
+        const cached = requestCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.data;
+        }
+    }
+
+    const finalHeaders = { ...headers };
+    if (method !== 'GET') {
+        finalHeaders['X-Requested-With'] = finalHeaders['X-Requested-With'] || 'XMLHttpRequest';
+        finalHeaders['X-Request-ID'] = finalHeaders['X-Request-ID'] || makeRequestId();
+    }
+
+    const requestOptions = {
+        method,
+        credentials: 'include',
+        headers: finalHeaders
+    };
+
+    if (body !== undefined) {
+        if (body instanceof FormData) {
+            requestOptions.body = body;
+        } else {
+            requestOptions.body = JSON.stringify(body);
+            requestOptions.headers['Content-Type'] = 'application/json';
+        }
+    }
+
+    let attempt = 0;
+    while (attempt <= retries) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const response = await fetch(url, { ...requestOptions, signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            const contentType = response.headers.get('content-type') || '';
+            const data = contentType.includes('application/json')
+                ? await response.json()
+                : await response.text();
+
+            if (!response.ok) {
+                const detail = typeof data === 'object' && data ? data.detail : null;
+                const error = new Error(detail || `HTTP ${response.status}`);
+                error.status = response.status;
+                error.detail = detail;
+                throw error;
+            }
+
+            if (method === 'GET' && cacheTtlMs > 0) {
+                requestCache.set(cacheKey, { data, expiresAt: Date.now() + cacheTtlMs });
+            }
+            return data;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            const isLastAttempt = attempt >= retries;
+            if (isLastAttempt) throw err;
+            attempt++;
+        }
+    }
+}
+
+function invalidateGetCacheByPrefix(prefix) {
+    for (const key of requestCache.keys()) {
+        if (key.startsWith(`GET:${prefix}`)) {
+            requestCache.delete(key);
+        }
+    }
+}
 
 function isElementVisible(element) {
     if (!element) return false;
@@ -96,6 +195,19 @@ function backToMenuFromGameOver() {
 
 playAgainBtn.addEventListener('click', restartCurrentGame);
 backToMenuBtn.addEventListener('click', backToMenuFromGameOver);
+anonLoginBtn.addEventListener('click', () => {
+    anonScoreModal.style.display = 'none';
+    window.location.href = `${HTTPS_DIR}/login`;
+});
+anonCloseBtn.addEventListener('click', () => {
+    anonScoreModal.style.display = 'none';
+});
+
+function showAnonScoreModal() {
+    if (sessionStorage.getItem('anonScoreNoticeShown') === '1') return;
+    anonScoreModal.style.display = 'flex';
+    sessionStorage.setItem('anonScoreNoticeShown', '1');
+}
 
 function derivePlayerNameFromAuth(user) {
     const fallback = 'Usuario';
@@ -117,24 +229,28 @@ function updatePlayerBadge() {
 
 async function syncAuthState() {
     try {
-        const response = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
-        if (!response.ok) {
-            currentUser = null;
-            playerName = 'Anónimo';
-            window.playerName = playerName;
-            updatePlayerBadge();
-            return;
-        }
-        currentUser = await response.json();
+        const me = await apiRequest(`${API_BASE}/auth/me`, { retries: 0 });
+        currentUser = me;
         playerName = derivePlayerNameFromAuth(currentUser);
         window.playerName = playerName;
         updatePlayerBadge();
     } catch (err) {
+        if (err.status && err.status !== 401) {
+            console.error('Auth sync error:', err);
+        }
         currentUser = null;
         playerName = 'Anónimo';
         window.playerName = playerName;
         updatePlayerBadge();
     }
+}
+
+function resetLocalAuthState() {
+    currentUser = null;
+    playerName = 'Anónimo';
+    window.playerName = playerName;
+    currentGameAttemptId = null;
+    updatePlayerBadge();
 }
 
 authBtn.addEventListener('click', async () => {
@@ -143,15 +259,11 @@ authBtn.addEventListener('click', async () => {
         return;
     }
     try {
-        await fetch(`${HTTPS_DIR}/auth/logout`, {
-            method: 'POST',
-            credentials: 'include'
-        });
+        await apiRequest(`${HTTPS_DIR}/auth/logout`, { method: 'POST', retries: 0 });
+    } catch (err) {
+        console.error('Logout error:', err);
     } finally {
-        currentUser = null;
-        playerName = 'Anónimo';
-        window.playerName = playerName;
-        updatePlayerBadge();
+        resetLocalAuthState();
     }
 });
 
@@ -195,8 +307,7 @@ async function loadLeaderboard(gameId = '') {
     
     try {
         const url = gameId ? `${API_BASE}/leaderboard?game_id=${gameId}&limit=20` : `${API_BASE}/leaderboard?limit=20`;
-        const response = await fetch(url);
-        const scores = await response.json();
+        const scores = await apiRequest(url, { cacheTtlMs: 15000 });
         
         if (scores.length === 0) {
             content.innerHTML = '<p style="color: #aaa;">Aún no hay puntuación</p>';
@@ -224,12 +335,13 @@ async function loadLeaderboard(gameId = '') {
         html += '</tbody></table>';
         content.innerHTML = html;
     } catch (err) {
-        content.innerHTML = '<p class="error">Error al cargar la tabla</p>';
+        content.innerHTML = `<p class="error">${resolveErrorMessage(err, 'Error al cargar la tabla')}</p>`;
     }
 }
 
 document.getElementById('refresh-leaderboard').addEventListener('click', () => {
     const filter = document.getElementById('leaderboard-filter').value;
+    invalidateGetCacheByPrefix(`${API_BASE}/leaderboard`);
     loadLeaderboard(filter);
 });
 
@@ -266,10 +378,20 @@ function loadGameScript(gameType) {
 
 async function launchGame(gameId, skipStartButton = false) {
     currentGameId = gameId;
+    currentGameAttemptId = null;
     
     try {
-        const response = await fetch(`${API_BASE}/games/${gameId}`);
-        const config = await response.json();
+        const config = await apiRequest(`${API_BASE}/games/${gameId}`);
+        if (currentUser) {
+            const attempt = await apiRequest(`${API_BASE}/game-attempts/start`, {
+                method: 'POST',
+                body: { game_id: gameId },
+                retries: 0
+            });
+            currentGameAttemptId = attempt.attempt_id;
+        } else {
+            showAnonScoreModal();
+        }
 
         await loadGameScript(config.type);
         
@@ -285,7 +407,9 @@ async function launchGame(gameId, skipStartButton = false) {
         const callbacks = {
             onScoreUpdate: (score) => { },
             onGameEnd: async (finalScore, durationMs) => {
-                await submitScore(config.id, finalScore, durationMs, "1.0");
+                if (currentUser) {
+                    await submitScore(config.id, finalScore, durationMs, "1.0");
+                }
                 showGameOverModal(finalScore, gameId);
             }
         };
@@ -300,7 +424,7 @@ async function launchGame(gameId, skipStartButton = false) {
 
     } catch (error) {
         console.error("Error: ", error);
-        alert('Ocurrió un error. Por favor, intenta más tarde');
+        alert(resolveErrorMessage(error, 'Ocurrió un error. Por favor, intenta más tarde'));
         showMenu();
     }
 }
@@ -342,23 +466,26 @@ function showCountdownAndStart(seconds) {
 }
 
 async function submitScore(gameId, score, durationMs, version) {
-    if (score < 1) return;
+    if (score < 1 || !currentGameAttemptId || !currentUser) return;
 
     const payload = {
         game_id: gameId,
-        player_name: playerName,
+        attempt_id: currentGameAttemptId,
         score: score,
         duration_ms: durationMs,
         game_version: version
     };
 
     try {
-        await fetch(`${API_BASE}/scores`, {
+        await apiRequest(`${API_BASE}/scores`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: payload,
+            retries: 0
         });
+        currentGameAttemptId = null;
+        invalidateGetCacheByPrefix(`${API_BASE}/leaderboard`);
     } catch (err) {
+        currentGameAttemptId = null;
         console.error("Failed to send the score", err);
     }
 }
@@ -366,6 +493,7 @@ async function submitScore(gameId, score, durationMs, version) {
 function showMenu() {
     if (activeModule && activeModule.cleanup) activeModule.cleanup();
     activeModule = null;
+    currentGameAttemptId = null;
     switchView('menu');
 }
 
@@ -373,8 +501,7 @@ async function init() {
     await syncAuthState();
 
     try {
-        const response = await fetch(`${API_BASE}/games`);
-        const games = await response.json();
+        const games = await apiRequest(`${API_BASE}/games`, { cacheTtlMs: 60000 });
         
         gameList.innerHTML = '';
         
@@ -398,8 +525,16 @@ async function init() {
             gameList.appendChild(btn);
         });
     } catch (err) {
-        gameList.innerHTML = `<p class="error">Error de conexión con el servidor</p>`;
+        gameList.innerHTML = `<p class="error">${resolveErrorMessage(err, 'Error de conexión con el servidor')}</p>`;
     }
 }
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+});
+
+window.addEventListener('error', (event) => {
+    console.error('Unhandled error:', event.error || event.message);
+});
 
 init();

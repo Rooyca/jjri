@@ -6,20 +6,30 @@ from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.base_client.errors import OAuthError
 from sqlalchemy.orm import Session
 from typing import Optional
+from urllib.parse import urlparse
+import logging
+import time
+import uuid
+from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from database import get_db, init_db
-from schemas import ScoreSubmission, ScoreResponse, GameListItem, GameConfig, AuthUserResponse
+from schemas import (
+    ScoreSubmission, ScoreResponse, GameListItem, GameConfig, AuthUserResponse,
+    GameAttemptStartRequest, GameAttemptStartResponse
+)
 from crud import (
     get_game, get_all_games, get_player_score,
     create_score, update_score, get_leaderboard, get_all_words,
-    upsert_google_user, get_user_by_id
+    upsert_google_user, get_user_by_id, create_game_attempt, get_game_attempt, consume_game_attempt
 )
 from config import (
     CORS_ORIGINS, CORS_ALLOW_ALL, MIN_SCORE, MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH,
-    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET_KEY, SESSION_COOKIE_SECURE
+    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET_KEY, SESSION_COOKIE_SECURE,
+    SESSION_COOKIE_SAMESITE, SECURITY_HEADERS_ENABLED, CSRF_ORIGIN_CHECK_ENABLED,
+    TRUSTED_IFRAME_ORIGINS
 )
 from profanity_filter import validate_and_clean_username
 from websocket import handle_race_websocket, handle_parchis_websocket, handle_chatroom_websocket
@@ -44,15 +54,102 @@ app.add_middleware(
     allow_origins=["*"] if CORS_ALLOW_ALL else CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-Requested-With", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET_KEY,
-    same_site="lax",
+    same_site=SESSION_COOKIE_SAMESITE,
     https_only=SESSION_COOKIE_SECURE,
 )
+
+logger = logging.getLogger("juegos_jri")
+if not logger.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s'
+    )
+
+ALLOWED_ORIGINS = set(CORS_ORIGINS)
+ATTEMPT_EXPIRY_GRACE_SECONDS = 30
+
+
+def request_origin(request: Request) -> Optional[str]:
+    origin = request.headers.get("origin")
+    if not origin:
+        return None
+    parsed = urlparse(origin)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def same_origin(request: Request, origin: str) -> bool:
+    request_origin_url = f"{request.url.scheme}://{request.url.netloc}"
+    return request_origin_url == origin
+
+
+def enforce_origin_for_state_change(request: Request):
+    if not CSRF_ORIGIN_CHECK_ENABLED:
+        return
+    origin = request_origin(request)
+    if not origin:
+        return
+    if origin in ALLOWED_ORIGINS or same_origin(request, origin):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Forbidden origin for state-changing request."
+    )
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "request_id=%s method=%s path=%s status=%s duration_ms=%s origin=%s",
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+        request.headers.get("origin", "-")
+    )
+    return response
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if not SECURITY_HEADERS_ENABLED:
+        return response
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+
+    connect_sources = ["'self'", "https:", "wss:"]
+    csp_parts = [
+        "default-src 'self'",
+        "img-src 'self' data: https:",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'unsafe-inline' https:",
+        f"connect-src {' '.join(connect_sources)}",
+        "object-src 'none'",
+        "base-uri 'self'"
+    ]
+    if TRUSTED_IFRAME_ORIGINS:
+        frame_ancestors = " ".join(["'self'", *TRUSTED_IFRAME_ORIGINS])
+        csp_parts.append(f"frame-ancestors {frame_ancestors}")
+    response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
+    return response
 
 TEMPLATES = Path("templates")
 GOOGLE_OAUTH_ENABLED = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
@@ -89,6 +186,16 @@ def resolve_authenticated_player_name(user) -> str:
     return clean_name
 
 
+def require_authenticated_user(request: Request, db: Session):
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inicia sesión para guardar puntajes en la tabla."
+        )
+    return user
+
+
 @lru_cache(maxsize=1)
 def build_page() -> str:
     html = (TEMPLATES/"index.html").read_text()
@@ -103,6 +210,11 @@ def build_page() -> str:
 @app.get("/page", response_class=HTMLResponse)
 async def get_full_page():
     return HTMLResponse(content=build_page())
+
+
+@app.get("/healthz")
+async def healthz():
+    return JSONResponse(content={"status": "ok"})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -177,6 +289,7 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/auth/logout")
 def auth_logout(request: Request):
+    enforce_origin_for_state_change(request)
     request.session.clear()
     return JSONResponse(content={"status": "success"})
 
@@ -229,46 +342,101 @@ def get_game_config(game_id: str, db: Session = Depends(get_db)):
     )
 
 
+@app.post("/api/game-attempts/start", response_model=GameAttemptStartResponse)
+def start_game_attempt(payload: GameAttemptStartRequest, request: Request, db: Session = Depends(get_db)):
+    enforce_origin_for_state_change(request)
+    user = require_authenticated_user(request, db)
+    game = get_game(db, payload.game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    now = datetime.now(timezone.utc)
+    duration_seconds = game.duration_seconds or 60
+    expires_at = now + timedelta(seconds=duration_seconds + ATTEMPT_EXPIRY_GRACE_SECONDS)
+    attempt_id = str(uuid.uuid4())
+    attempt = create_game_attempt(
+        db=db,
+        attempt_id=attempt_id,
+        user_id=user.id,
+        game_id=game.id,
+        expires_at=expires_at
+    )
+    return GameAttemptStartResponse(
+        attempt_id=attempt.id,
+        expires_at=attempt.expires_at.isoformat()
+    )
+
+
 @app.post("/api/scores")
 def submit_score(submission: ScoreSubmission, request: Request, db: Session = Depends(get_db)):
     """Validates the score against the config and saves it to database."""
+    enforce_origin_for_state_change(request)
+    user = require_authenticated_user(request, db)
     game = get_game(db, submission.game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    attempt = get_game_attempt(db, submission.attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid game attempt.")
+    if attempt.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attempt ownership mismatch.")
+    if attempt.game_id != submission.game_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attempt game mismatch.")
+    if attempt.consumed_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Attempt already consumed.")
+
+    now = datetime.now(timezone.utc)
+    if attempt.expires_at < now:
+        consume_game_attempt(db, attempt)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attempt expired.")
+
     if submission.score > game.max_plausible_score:
+        consume_game_attempt(db, attempt)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Score rejected: Implausible result."
         )
     if submission.score < MIN_SCORE:
+        consume_game_attempt(db, attempt)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Score must be at least {MIN_SCORE} point(s)."
         )
-    user = get_current_user(request, db)
-    score_owner_name = resolve_authenticated_player_name(user) if user else "Anónimo"
+    elapsed_ms = int((now - attempt.started_at).total_seconds() * 1000)
+    if elapsed_ms < 1000:
+        consume_game_attempt(db, attempt)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attempt finished too quickly."
+        )
+
+    score_owner_name = resolve_authenticated_player_name(user)
     clean_username = validate_and_clean_username(score_owner_name)
 
     if len(clean_username) < MIN_USERNAME_LENGTH or len(clean_username) > MAX_USERNAME_LENGTH:
+        consume_game_attempt(db, attempt)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Username must be between {MIN_USERNAME_LENGTH} and {MAX_USERNAME_LENGTH} characters."
         )
     existing_score = get_player_score(db, submission.game_id, clean_username)
+    canonical_duration_ms = elapsed_ms
 
     if existing_score:
         if submission.score > existing_score.score:
             updated_score = update_score(
                 db, existing_score, submission.score,
-                submission.duration_ms, submission.game_version
+                canonical_duration_ms, submission.game_version
             )
+            consume_game_attempt(db, attempt)
             return {
                 "status": "success",
                 "message": "Score updated (new high score!)",
                 "id": updated_score.id
             }
         else:
+            consume_game_attempt(db, attempt)
             return {
                 "status": "ignored",
                 "message": "Score not saved (not higher than existing score)",
@@ -277,8 +445,9 @@ def submit_score(submission: ScoreSubmission, request: Request, db: Session = De
     else:
         new_score = create_score(
             db, submission.game_id, clean_username, submission.score,
-            submission.duration_ms, submission.game_version
+            canonical_duration_ms, submission.game_version
         )
+        consume_game_attempt(db, attempt)
         return {
             "status": "success",
             "message": "Score saved successfully",

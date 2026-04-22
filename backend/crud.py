@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timezone
 from typing import List, Optional
-from models import Score, Game, Word, User
+from models import Score, Game, Word, User, GameAttempt
 from sqlalchemy.dialects.sqlite import insert 
 
 def get_game(db: Session, game_id: str) -> Optional[Game]:
@@ -47,14 +47,44 @@ def update_score(db: Session, existing_score: Score, score: int,
     return existing_score
 
 def get_leaderboard(db: Session, game_id: Optional[str] = None, 
-                   limit: int = 10) -> List[Score]:
+                    limit: int = 10) -> List[Score]:
     """Get top scores, optionally filtered by game."""
-    query = db.query(Score)
+    query = db.query(Score).filter(Score.player_name != "Anónimo")
     
     if game_id:
         query = query.filter(Score.game_id == game_id)
     
     return query.order_by(desc(Score.score), Score.duration_ms).limit(limit).all()
+
+
+def create_game_attempt(
+    db: Session,
+    attempt_id: str,
+    user_id: int,
+    game_id: str,
+    expires_at: datetime
+) -> GameAttempt:
+    attempt = GameAttempt(
+        id=attempt_id,
+        user_id=user_id,
+        game_id=game_id,
+        expires_at=expires_at
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    return attempt
+
+
+def get_game_attempt(db: Session, attempt_id: str) -> Optional[GameAttempt]:
+    return db.query(GameAttempt).filter(GameAttempt.id == attempt_id).first()
+
+
+def consume_game_attempt(db: Session, attempt: GameAttempt) -> GameAttempt:
+    attempt.consumed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(attempt)
+    return attempt
 
 def create_game(db: Session, game_id: str, title: str, game_type: str,
                 duration_seconds: Optional[int], max_plausible_score: int,

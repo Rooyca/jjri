@@ -14,4 +14,7 @@ RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8000/healthz >/dev/null || exit 1
+
 ENTRYPOINT ["./docker-entrypoint.sh"]

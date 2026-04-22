@@ -61,3 +61,20 @@ class User(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         index=True
     )
+
+
+class GameAttempt(Base):
+    """Server-side validated game attempts used to accept score submissions."""
+    __tablename__ = "game_attempts"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    game_id = Column(String, nullable=False, index=True)
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    consumed_at = Column(DateTime, nullable=True, index=True)
+
+    __table_args__ = (
+        Index('idx_attempt_user_game', 'user_id', 'game_id'),
+        Index('idx_attempt_active_window', 'game_id', 'expires_at', 'consumed_at'),
+    )
