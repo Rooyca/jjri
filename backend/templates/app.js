@@ -26,6 +26,7 @@ const REQUEST_TIMEOUT_MS = 10000;
 const playerNameDisplay = document.getElementById('player-name-display');
 const authBtn = document.getElementById('change-name-btn');
 const playerLabel = document.querySelector('.player-label');
+const nameModal = document.getElementById('name-modal');
 
 const gameOverModal = document.getElementById('game-over-modal');
 const gameOverScore = document.getElementById('game-over-score');
@@ -178,6 +179,29 @@ function handleStartRestartShortcut(e) {
 }
 
 document.addEventListener('keydown', handleStartRestartShortcut);
+
+function handleEscapeModalClose(e) {
+    if (e.key !== 'Escape') return;
+
+    if (isElementVisible(gameOverModal)) {
+        e.preventDefault();
+        backToMenuFromGameOver();
+        return;
+    }
+
+    if (isElementVisible(anonScoreModal)) {
+        e.preventDefault();
+        anonScoreModal.style.display = 'none';
+        return;
+    }
+
+    if (isElementVisible(nameModal)) {
+        e.preventDefault();
+        nameModal.style.display = 'none';
+    }
+}
+
+document.addEventListener('keydown', handleEscapeModalClose);
 
 function restartCurrentGame() {
     gameOverModal.style.display = 'none';

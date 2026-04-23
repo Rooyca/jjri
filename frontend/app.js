@@ -98,12 +98,13 @@ function closeModal(modal, restoreFocus = true) {
 document.addEventListener('keydown', (event) => {
     if (activeModal) {
         if (event.key === 'Escape') {
-            if (activeModal === nameModal && !playerName) return;
+            event.preventDefault();
 
-            if (activeModal === nameModal) {
-                hideNameModal();
-            } else if (activeModal === gameOverModal) {
-                hideGameOverModal();
+            if (activeModal === gameOverModal) {
+                closeModal(gameOverModal);
+                showMenu();
+            } else {
+                closeModal(activeModal);
             }
             return;
         }
