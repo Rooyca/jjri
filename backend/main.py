@@ -186,6 +186,16 @@ def resolve_authenticated_player_name(user) -> str:
     return clean_name
 
 
+def normalize_utc_datetime(dt: datetime) -> datetime:
+    """
+    Normalize datetimes coming from SQLite to timezone-aware UTC.
+    SQLite commonly returns naive datetimes even if values were written with UTC.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def require_authenticated_user(request: Request, db: Session):
     user = get_current_user(request, db)
     if not user:
@@ -387,7 +397,10 @@ def submit_score(submission: ScoreSubmission, request: Request, db: Session = De
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Attempt already consumed.")
 
     now = datetime.now(timezone.utc)
-    if attempt.expires_at < now:
+    attempt_expires_at = normalize_utc_datetime(attempt.expires_at)
+    attempt_started_at = normalize_utc_datetime(attempt.started_at)
+
+    if attempt_expires_at < now:
         consume_game_attempt(db, attempt)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attempt expired.")
 
@@ -403,7 +416,7 @@ def submit_score(submission: ScoreSubmission, request: Request, db: Session = De
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Score must be at least {MIN_SCORE} point(s)."
         )
-    elapsed_ms = int((now - attempt.started_at).total_seconds() * 1000)
+    elapsed_ms = int((now - attempt_started_at).total_seconds() * 1000)
     if elapsed_ms < 1000:
         consume_game_attempt(db, attempt)
         raise HTTPException(
